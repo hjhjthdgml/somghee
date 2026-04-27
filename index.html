@@ -1,4 +1,4 @@
- <!DOCTYPE html>
+<!DOCTYPE html>
 
 <html lang="ko">
 <head>
@@ -263,6 +263,7 @@ window.FB = {
 };
 window.PINS = {wife:'1234', husband:'5678'};
 
+
 // ━━ STATE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 let role=null, Y=new Date().getFullYear(), M=new Date().getMonth()+1;
 let DB={items:[],month:{},finance:{}};
@@ -503,8 +504,26 @@ function repayRow(item,viewer){
 }
 
 function rRepayManage(){
+  const xlsxCard=`<div class="form-card" style="border:2px dashed var(--blue);background:var(--blue-l);margin-bottom:12px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+      <span style="font-size:24px">📥</span>
+      <div>
+        <div style="font-size:14px;font-weight:800;color:var(--blue)">엑셀로 일괄 등록</div>
+        <div style="font-size:12px;color:var(--t3);margin-top:2px">템플릿 다운로드 → 작성 → 업로드하면 한번에 등록돼요</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px">
+      <label for="xlsxUpload" style="flex:2;padding:12px;background:var(--blue);color:#fff;border-radius:10px;font-size:14px;font-weight:700;text-align:center;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">
+        ⬆️ 엑셀 업로드
+      </label>
+      <input type="file" id="xlsxUpload" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleXlsxUpload(event,'repay')">
+      <button onclick="downloadTemplate('repay')" style="flex:1;padding:12px;background:white;color:var(--blue);border:1.5px solid var(--blue);border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">템플릿 ⬇️</button>
+    </div>
+    <div id="uploadPreview"></div>
+  </div>`;
+
   const form=`<div class="form-card">
-    <div class="form-ttl">+ 상환 항목 추가</div>
+    <div class="form-ttl">+ 직접 입력</div>
     <div class="field"><label>항목명</label><input id="in-name" placeholder="예: 국민은행 대출 원금"></div>
     <div class="fr2">
       <div class="field"><label>구분</label><select id="in-cat"><option>대출 상환</option><option>카드론</option><option>보험</option><option>주거</option><option>기타</option></select></div>
@@ -518,30 +537,12 @@ function rRepayManage(){
     <button class="btn-p" onclick="addItem()">추가하기</button>
   </div>`;
 
-  const xlsxCard=`<div class="form-card" style="border:2px dashed var(--blue);background:var(--blue-l)">
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
-      <span style="font-size:24px">📊</span>
-      <div>
-        <div style="font-size:14px;font-weight:800;color:var(--blue)">엑셀로 일괄 등록</div>
-        <div style="font-size:12px;color:var(--t3);margin-top:2px">템플릿 다운로드 후 채워서 업로드하면 한번에 등록돼요</div>
-      </div>
-    </div>
-    <div style="display:flex;gap:8px">
-      <label for="xlsxUpload" style="flex:2;padding:12px;background:var(--blue);color:#fff;border-radius:10px;font-size:14px;font-weight:700;text-align:center;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">
-        <span>⬆️</span> 엑셀 업로드
-      </label>
-      <input type="file" id="xlsxUpload" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleXlsxUpload(event)">
-      <button onclick="downloadTemplate()" style="flex:1;padding:12px;background:white;color:var(--blue);border:1.5px solid var(--blue);border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">템플릿</button>
-    </div>
-    <div id="uploadPreview"></div>
-  </div>`;
-
   const list=DB.items.length?DB.items.map(it=>`<div class="sec" style="margin-bottom:8px"><div class="li">
     <div class="li-ico blue">💳</div>
     <div class="li-body"><div class="li-name">${it.name}</div><div class="li-sub"><span style="font-family:monospace">${it.bank||''} ${it.account||''}</span><span class="tag tag-gray">매월 ${it.dueDay||'-'}일</span></div></div>
     <div class="li-r"><div class="li-amt">${W(it.amount)}</div><button class="xbtn" onclick="delItem('${it.id}')">×</button></div>
   </div></div>`).join(''):`<div class="empty"><div class="empty-ico">📋</div><p>항목을 추가해주세요</p></div>`;
-  return xlsxCard+form+`<div style="font-size:13px;font-weight:700;color:var(--t2);margin-bottom:10px">등록된 항목 ${DB.items.length}개</div>`+list;
+  return xlsxCard+form+`<div style="font-size:13px;font-weight:700;color:var(--t2);margin-bottom:10px;margin-top:4px">등록된 항목 ${DB.items.length}개</div>`+list;
 }
 
 // 정산 액션
@@ -688,7 +689,7 @@ function rFinCard(){
   const canEdit=role==='wife';
   const perm=role==='husband'?`<div class="perm-box"><div class="pi">🔒</div><div><strong>조회만 가능</strong><p>카드 청구액 관리는 아내가 해요.</p></div></div>`:'';
   const form=canEdit?`<div class="form-card">
-    <div class="form-ttl">카드 청구액 등록</div>
+    <div class="form-ttl">카드 청구액 직접 입력</div>
     <div class="fr2">
       <div class="field"><label>카드사</label><input id="c-name" placeholder="삼성카드"></div>
       <div class="field"><label>결제일</label><input type="number" id="c-day" placeholder="15" min="1" max="31" inputmode="numeric"></div>
@@ -696,6 +697,18 @@ function rFinCard(){
     <div class="field"><label>이번달 청구금액</label><input type="number" id="c-amt" placeholder="0" inputmode="numeric"></div>
     <div class="field"><label>메모</label><input id="c-note" placeholder="예: 생활비 포함"></div>
     <button class="btn-p" onclick="addCard()">등록하기</button>
+  </div>
+  <div class="form-card" style="border:2px dashed var(--yellow);background:var(--yellow-l);margin-bottom:12px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+      <span style="font-size:22px">📥</span>
+      <div><div style="font-size:13px;font-weight:800;color:var(--yellow)">카드사 일괄 등록</div><div style="font-size:12px;color:var(--t3);margin-top:1px">여러 카드사를 한번에 등록해요</div></div>
+    </div>
+    <div style="display:flex;gap:8px">
+      <label for="cardXlsx" style="flex:2;padding:11px;background:var(--yellow);color:#fff;border-radius:10px;font-size:13px;font-weight:700;text-align:center;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:5px">⬆️ 엑셀 업로드</label>
+      <input type="file" id="cardXlsx" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleXlsxUpload(event,'card')">
+      <button onclick="downloadTemplate('card')" style="flex:1;padding:11px;background:white;color:var(--yellow);border:1.5px solid var(--yellow);border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">템플릿 ⬇️</button>
+    </div>
+    <div id="uploadPreview"></div>
   </div>`:'';
   const list=cards.length?`<div class="sec"><div class="sec-hdr"><div class="sec-title">카드사별 청구</div><div class="sec-total">${W(total)}</div></div>
     ${cards.map(([id,c])=>`<div class="li"><div class="li-ico yellow">🃏</div>
@@ -807,18 +820,176 @@ window.addIncome=async function(){
 };
 window.delIncome=async function(id){delete DB.finance.income[id];await dbSet(P.finance(Y,M),DB.finance);toast('삭제됐어요','🗑');};
 
-// ━━ EXCEL UPLOAD ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// SheetJS 동적 로드
+// ━━ EXCEL UPLOAD / DOWNLOAD ━━━━━━━━━━━━━━━━━━━━
 async function loadSheetJS() {
   if(window.XLSX) return window.XLSX;
   return new Promise((res,rej)=>{
     const s=document.createElement('script');
     s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
-    s.onload=()=>res(window.XLSX);
-    s.onerror=rej;
+    s.onload=()=>res(window.XLSX); s.onerror=rej;
     document.head.appendChild(s);
   });
 }
+
+let xlsxPreviewData=[], xlsxPreviewType='';
+
+window.handleXlsxUpload = async function(e, type) {
+  const file=e.target.files[0]; if(!file) return;
+  const preview=document.getElementById('uploadPreview');
+  preview.innerHTML=`<div style="margin-top:12px;text-align:center;color:var(--t3);font-size:13px">⏳ 파일 읽는 중...</div>`;
+  try {
+    const XLSX=await loadSheetJS();
+    const buf=await file.arrayBuffer();
+    const wb=XLSX.read(buf,{type:'array'});
+    const ws=wb.Sheets[wb.SheetNames[0]];
+    const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+
+    // 헤더행 찾기
+    let dataStart=3;
+    for(let i=0;i<Math.min(rows.length,8);i++){
+      const row=rows[i].map(c=>String(c).trim());
+      if(row.some(c=>c.includes('항목명')||c.includes('이름')||c.includes('대출처')||c.includes('카드사'))) { dataStart=i+1; break; }
+    }
+
+    let parsed=[];
+    if(type==='repay') {
+      // 대출/상환 항목
+      for(let i=dataStart;i<rows.length;i++){
+        const r=rows[i];
+        const name=String(r[0]||'').trim(), amt=Number(String(r[3]||r[2]||'0').replace(/[^0-9.-]/g,''));
+        if(!name||!amt) continue;
+        parsed.push({name, cat:String(r[2]||'대출 상환').trim()||'대출 상환', amount:amt,
+          bank:String(r[0]||'').trim(), account:String(r[5]||'').trim(),
+          dueDay:String(r[7]||'').replace(/[^0-9]/g,''),
+          remain:Number(String(r[4]||'0').replace(/[^0-9.-]/g,'')),
+          rate:Number(String(r[5]||'0').replace(/[^0-9.-]/g,'')),
+        });
+      }
+    } else if(type==='fixed') {
+      // 고정지출
+      for(let i=dataStart;i<rows.length;i++){
+        const r=rows[i];
+        const name=String(r[1]||r[0]||'').trim(), amt=Number(String(r[2]||'0').replace(/[^0-9.-]/g,''));
+        if(!name||!amt) continue;
+        parsed.push({name, cat:String(r[0]||'기타').trim()||'기타', amount:amt,
+          dayNum:String(r[3]||'').replace(/[^0-9]/g,''),
+          method:String(r[4]||'자동이체').trim(), note:String(r[5]||'').trim()
+        });
+      }
+    } else if(type==='card') {
+      // 카드 청구
+      for(let i=dataStart;i<rows.length;i++){
+        const r=rows[i];
+        const name=String(r[0]||'').trim(), amt=Number(String(r[2]||'0').replace(/[^0-9.-]/g,''));
+        if(!name||!amt) continue;
+        parsed.push({name, amount:amt, dueDay:String(r[1]||'').replace(/[^0-9]/g,''), note:String(r[3]||'').trim()});
+      }
+    }
+
+    if(!parsed.length) { preview.innerHTML=`<div style="margin-top:12px;background:var(--red-l);border-radius:10px;padding:12px;color:var(--red);font-size:13px;font-weight:600">⚠️ 유효한 데이터가 없어요</div>`; return; }
+
+    xlsxPreviewData=parsed; xlsxPreviewType=type;
+    const total=parsed.reduce((s,it)=>s+(it.amount||0),0);
+    const rows_html=parsed.map((it,i)=>`<tr style="border-bottom:1px solid var(--border)">
+      <td style="padding:8px 10px;font-size:13px;font-weight:600">${it.name}</td>
+      <td style="padding:8px 6px;font-size:11px"><span class="tag tag-blue">${it.cat||''}</span></td>
+      <td style="padding:8px 10px;font-size:13px;font-weight:700;text-align:right;color:var(--red)">${W(it.amount)}</td>
+      <td style="padding:4px"><button onclick="xlsxPreviewData.splice(${i},1);reRenderPreview()" style="background:none;border:none;color:var(--t4);cursor:pointer;font-size:15px">×</button></td>
+    </tr>`).join('');
+    preview.innerHTML=`<div style="margin-top:14px;border-radius:12px;overflow:hidden;border:1px solid var(--border)">
+      <div style="background:var(--sf2);padding:10px 14px;display:flex;align-items:center;justify-content:space-between">
+        <div style="font-size:13px;font-weight:700">${parsed.length}개 · ${W(total)}</div>
+        <button onclick="xlsxPreviewData=[];document.getElementById('uploadPreview').innerHTML=''" style="font-size:11px;color:var(--t3);background:none;border:none;cursor:pointer;font-family:inherit">취소</button>
+      </div>
+      <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">
+        <thead><tr style="background:var(--sf2)"><th style="padding:8px 10px;font-size:11px;font-weight:700;color:var(--t2);text-align:left">항목명</th><th style="padding:8px 6px;font-size:11px;font-weight:700;color:var(--t2)">구분</th><th style="padding:8px 10px;font-size:11px;font-weight:700;color:var(--t2);text-align:right">금액</th><th></th></tr></thead>
+        <tbody>${rows_html}</tbody>
+      </table></div>
+      <div style="padding:12px;border-top:1px solid var(--border)">
+        <button onclick="confirmXlsxImport()" style="width:100%;padding:12px;background:var(--green);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit">✅ ${parsed.length}개 전체 등록</button>
+      </div>
+    </div>`;
+  } catch(err) {
+    console.error(err);
+    preview.innerHTML=`<div style="margin-top:12px;background:var(--red-l);border-radius:10px;padding:12px;color:var(--red);font-size:13px;font-weight:600">⚠️ 파일을 읽지 못했어요</div>`;
+  }
+  e.target.value='';
+};
+
+window.reRenderPreview=function(){
+  if(!xlsxPreviewData.length){document.getElementById('uploadPreview').innerHTML='';return;}
+  const total=xlsxPreviewData.reduce((s,it)=>s+(it.amount||0),0);
+  const tbody=document.querySelector('#uploadPreview table tbody');
+  if(!tbody)return;
+  tbody.innerHTML=xlsxPreviewData.map((it,i)=>`<tr style="border-bottom:1px solid var(--border)">
+    <td style="padding:8px 10px;font-size:13px;font-weight:600">${it.name}</td>
+    <td style="padding:8px 6px;font-size:11px"><span class="tag tag-blue">${it.cat||''}</span></td>
+    <td style="padding:8px 10px;font-size:13px;font-weight:700;text-align:right;color:var(--red)">${W(it.amount)}</td>
+    <td style="padding:4px"><button onclick="xlsxPreviewData.splice(${i},1);reRenderPreview()" style="background:none;border:none;color:var(--t4);cursor:pointer;font-size:15px">×</button></td>
+  </tr>`).join('');
+};
+
+window.confirmXlsxImport = async function() {
+  if(!xlsxPreviewData.length) return;
+  if(xlsxPreviewType==='repay') {
+    const existNames=new Set(DB.items.map(i=>i.name));
+    const toAdd=xlsxPreviewData.filter(it=>!existNames.has(it.name)).map(it=>({...it,id:uid(),createdAt:td()}));
+    const skipped=xlsxPreviewData.length-toAdd.length;
+    DB.items=[...DB.items,...toAdd];
+    await dbSet(P.items,{list:DB.items});
+    toast(`${toAdd.length}개 등록 완료!${skipped?` (중복 ${skipped}개 제외)`:''}`, '✅', 4000);
+  } else if(xlsxPreviewType==='fixed') {
+    if(!DB.finance) DB.finance={};
+    if(!DB.finance.fixedItems) DB.finance.fixedItems=[];
+    const toAdd=xlsxPreviewData.map(it=>({...it,id:uid()}));
+    DB.finance.fixedItems=[...DB.finance.fixedItems,...toAdd];
+    await dbSet(P.finance(Y,M),DB.finance);
+    toast(`고정지출 ${toAdd.length}개 등록 완료!`, '✅', 4000);
+  } else if(xlsxPreviewType==='card') {
+    if(!DB.finance) DB.finance={};
+    if(!DB.finance.cards) DB.finance.cards={};
+    xlsxPreviewData.forEach(it=>{ DB.finance.cards[uid()]={name:it.name,amount:it.amount,dueDay:it.dueDay,note:it.note,addedAt:td()}; });
+    await dbSet(P.finance(Y,M),DB.finance);
+    toast(`카드 ${xlsxPreviewData.length}개 등록 완료!`, '✅', 4000);
+  }
+  xlsxPreviewData=[]; xlsxPreviewType='';
+  renderAll();
+};
+
+// 템플릿 다운로드 (타입별)
+window.downloadTemplate = function(type) {
+  let headers=[], rows=[], filename='';
+  if(type==='repay') {
+    headers=['대출처(은행/기관/지인)','대출일','대출유형','대출금(처음총액)','잔여원금','이자율(%)','기간(개월)','만료일','월납입원금','월납입이자','상환/남은횟수','연체여부','담보여부/사유'];
+    rows=[
+      ['국민은행','2023-01-01','신용대출','30000000','25000000','4.5','36','2026-01-01','800000','93750','12회/24회','없음','신용(무담보)/생활비'],
+      ['삼성카드 카드론','2023-06-01','카드론','5000000','3000000','15','24','2025-06-01','200000','37500','6회/18회','없음','신용(무담보)/긴급자금'],
+    ];
+    filename='대출현황_등록템플릿.csv';
+  } else if(type==='fixed') {
+    headers=['구분','항목명','금액','납부일(매월N일)','납부방법','메모'];
+    rows=[
+      ['대출 상환','국민은행 대출 원금','800000','25','자동이체',''],
+      ['카드론','삼성카드 카드론','200000','15','자동이체',''],
+      ['보험','실손보험','85000','1','자동이체',''],
+      ['통신','휴대폰 요금(본인)','55000','20','자동이체','SKT'],
+      ['주거','아파트 관리비','120000','25','자동이체',''],
+    ];
+    filename='고정지출_등록템플릿.csv';
+  } else if(type==='card') {
+    headers=['카드사','결제일(매월N일)','이번달청구금액','메모'];
+    rows=[
+      ['삼성카드','15','450000','생활비 포함'],
+      ['신한카드','20','230000',''],
+    ];
+    filename='카드청구_등록템플릿.csv';
+  }
+  const BOM='\uFEFF';
+  const csv=[headers,...rows].map(r=>r.map(c=>`"${c}"`).join(',')).join('\n');
+  const blob=new Blob([BOM+csv],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=filename; a.click();
+  toast(`${filename} 다운로드됐어요!`,'📥',2500);
+};
 
 let xlsxPreviewData = []; // 미리보기 데이터 임시 보관
 
