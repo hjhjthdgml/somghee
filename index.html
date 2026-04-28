@@ -74,7 +74,7 @@ body{font-family:'Pretendard',sans-serif;background:var(--bg);color:var(--t1);mi
 .mbtn:active{background:var(--blue-l);color:var(--blue)}
 .mlabel{font-size:15px;font-weight:800;letter-spacing:-.3px}
 .msummary{margin-left:auto;font-size:11px;color:var(--t3);text-align:right;line-height:1.5}
-.bnav{position:fixed;bottom:0;left:0;right:0;background:var(--surface);border-top:1px solid var(--border);display:grid;grid-template-columns:1fr 1fr;z-index:60;padding-bottom:env(safe-area-inset-bottom)}
+.bnav{position:fixed;bottom:0;left:0;right:0;background:var(--surface);border-top:1px solid var(--border);display:grid;grid-template-columns:1fr 1fr 1fr;z-index:60;padding-bottom:env(safe-area-inset-bottom)}
 .bni{display:flex;flex-direction:column;align-items:center;gap:3px;padding:10px 0;cursor:pointer;border:none;background:none;font-family:inherit;color:var(--t3);font-size:10px;font-weight:600}
 .bni.on{color:var(--blue)}
 .bni-ico{font-size:20px;line-height:1}
@@ -242,9 +242,11 @@ body{font-family:'Pretendard',sans-serif;background:var(--bg);color:var(--t1);mi
   </div>
   <div class="page on" id="pRepay"></div>
   <div class="page" id="pFinance"></div>
+  <div class="page" id="pDebt"></div>
   <nav class="bnav">
     <button class="bni on" onclick="goPage('repay',this)"><span class="bni-ico">💳</span>정산관리</button>
     <button class="bni" onclick="goPage('finance',this)"><span class="bni-ico">📊</span>가계관리</button>
+    <button class="bni" onclick="goPage('debt',this)"><span class="bni-ico">🏦</span>부채관리</button>
   </nav>
 </div>
 
@@ -266,9 +268,9 @@ window.PINS = {wife:'1234', husband:'5678'};
 
 // ━━ STATE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 let role=null, Y=new Date().getFullYear(), M=new Date().getMonth()+1;
-let DB={items:[],month:{},finance:{}};
+let DB={items:[],month:{},finance:{},debt:{}};
 let unsubs=[], fbFns=null, curPage='repay';
-let tabs={repay:'list', finance:'summary'};
+let tabs={repay:'list', finance:'summary', debt:'sheet1'};
 const FB_ON = window.FB.apiKey!=='YOUR_API_KEY';
 
 // ━━ FIREBASE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -331,6 +333,7 @@ const P={
   items:'shared/items',
   month:(y,m)=>`months/${mk(y,m)}/d`,
   finance:(y,m)=>`finance/${mk(y,m)}/d`,
+  debt:'debt/d',
 };
 
 // ━━ LOGIN / PIN ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -367,14 +370,15 @@ async function enterApp(){
   renderAll();
 }
 async function loadAll(){
-  const [it,md,fd]=await Promise.all([dbGet(P.items),dbGet(P.month(Y,M)),dbGet(P.finance(Y,M))]);
-  DB.items=it?.list||[];DB.month=md||{};DB.finance=fd||{};
+  const [it,md,fd,dd]=await Promise.all([dbGet(P.items),dbGet(P.month(Y,M)),dbGet(P.finance(Y,M)),dbGet(P.debt)]);
+  DB.items=it?.list||[];DB.month=md||{};DB.finance=fd||{};DB.debt=dd||{};
 }
 function startListeners(){
   unsubs.forEach(u=>typeof u==='function'&&u());unsubs=[];
   dbListen(P.items,d=>{DB.items=d?.list||[];renderAll();});
   dbListen(P.month(Y,M),d=>{DB.month=d||{};renderAll();});
   dbListen(P.finance(Y,M),d=>{DB.finance=d||{};renderAll();});
+  dbListen(P.debt,d=>{DB.debt=d||{};renderAll();});
 }
 window.cm=async function(d){M+=d;if(M>12){M=1;Y++;}if(M<1){M=12;Y--;}updateML();await loadAll();startListeners();renderAll();};
 function updateML(){document.getElementById('mlabel').textContent=`${Y}년 ${M}월`;}
@@ -383,15 +387,17 @@ function updateML(){document.getElementById('mlabel').textContent=`${Y}년 ${M}�
 window.goPage=function(p,btn){
   curPage=p;
   document.querySelectorAll('.page').forEach(x=>x.classList.remove('on'));
-  document.getElementById(p==='repay'?'pRepay':'pFinance').classList.add('on');
+  document.getElementById(p==='repay'?'pRepay':p==='finance'?'pFinance':'pDebt').classList.add('on');
   document.querySelectorAll('.bni').forEach(b=>b.classList.remove('on'));
   btn.classList.add('on');
+  const mb=document.querySelector('.month-bar');
+  if(mb) mb.style.display=p==='debt'?'none':'flex';
   renderAll();
 };
 window.setTab=function(page,tab){tabs[page]=tab;renderAll();};
 
 // ━━ RENDER ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-function renderAll(){updateBar();if(curPage==='repay')renderRepay();else renderFinance();}
+function renderAll(){updateBar();if(curPage==='repay')renderRepay();else if(curPage==='finance')renderFinance();else renderDebt();}
 function getAmt(item){const md=DB.month[item.id]||{};return Number(md.adjustedAmount??item.amount);}
 function totalInc(){return Object.values(DB.finance.income||{}).reduce((s,v)=>s+Number(v.amount||0),0);}
 function totalCards(){return Object.values(DB.finance.cards||{}).reduce((s,c)=>s+Number(c.amount||0),0);}
@@ -819,6 +825,460 @@ window.addIncome=async function(){
   ['i-amt','i-memo'].forEach(i=>{const e=document.getElementById(i);if(e)e.value='';});
 };
 window.delIncome=async function(id){delete DB.finance.income[id];await dbSet(P.finance(Y,M),DB.finance);toast('삭제됐어요','🗑');};
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// ◉ 부채관리
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function renderDebt(){
+  const el=document.getElementById('pDebt');
+  const tab=tabs.debt||'sheet1';
+  el.innerHTML=`<div class="tab-bar" style="grid-template-columns:repeat(4,1fr)">
+    <button class="tab ${tab==='sheet1'?'on':''}" onclick="setTab('debt','sheet1')" style="font-size:12px">대출현황</button>
+    <button class="tab ${tab==='sheet2'?'on':''}" onclick="setTab('debt','sheet2')" style="font-size:12px">공동·카드론</button>
+    <button class="tab ${tab==='sheet3'?'on':''}" onclick="setTab('debt','sheet3')" style="font-size:12px">코인내역</button>
+    <button class="tab ${tab==='sheet4'?'on':''}" onclick="setTab('debt','sheet4')" style="font-size:12px">고정지출</button>
+  </div><div id="dc"></div>`;
+  const dc=document.getElementById('dc');
+  if(tab==='sheet1') dc.innerHTML=rDebtS1();
+  else if(tab==='sheet2') dc.innerHTML=rDebtS2();
+  else if(tab==='sheet3') dc.innerHTML=rDebtS3();
+  else dc.innerHTML=rDebtS4();
+}
+function dLock(at){return`<div style="background:var(--red-l);border:1px solid rgba(240,68,82,.2);border-radius:12px;padding:12px 16px;margin-bottom:12px;display:flex;gap:10px;align-items:center"><span style="font-size:20px">🔒</span><div><div style="font-size:13px;font-weight:800;color:var(--red)">제출 완료 — 수정 불가</div><div style="font-size:11px;color:var(--t2);margin-top:2px">${at?new Date(at).toLocaleString('ko-KR',{dateStyle:'short',timeStyle:'short'}):''}에 제출됨</div></div></div>`;}
+function dWait(){return`<div class="notice yellow"><strong>⏳ 남편이 아직 작성 전이에요</strong>남편이 제출하면 여기서 확인할 수 있어요.</div>`;}
+function dSubmitBtn(sheet,n){return`<div style="background:var(--red-l);border:1px solid rgba(240,68,82,.2);border-radius:12px;padding:16px;margin-bottom:12px"><div style="font-size:13px;font-weight:800;color:var(--red);margin-bottom:5px">⚠️ 제출 전 확인</div><div style="font-size:12px;color:var(--t2);margin-bottom:12px;line-height:1.6">제출 후에는 수정할 수 없어요. ${n}개 항목이 등록돼 있어요.</div><button class="btn-p" style="background:var(--red);margin-top:0" onclick="debtSubmit('${sheet}')">최종 제출 (수정 불가)</button></div>`;}
+function dFld(label,val,cls){return`<div><span style="color:var(--t3);font-size:11px;font-weight:600">${label}</span><div class="${cls||''}" style="font-size:13px;font-weight:600;margin-top:2px;word-break:break-all">${val||'-'}</div></div>`;}
+function dTA(label,id,val,ph){return`<div class="field"><label>${label}</label><textarea id="${id}" rows="3" style="width:100%;background:var(--sf2);border:1.5px solid transparent;border-radius:9px;padding:11px 13px;font-size:14px;font-family:inherit;color:var(--t1);outline:none;resize:vertical" placeholder="${ph||''}">${val||''}</textarea></div>`;}
+
+// ─── 시트1: 대출 현황 ─────────────────────────────
+function rDebtS1(){
+  const s=DB.debt?.sheet1||{};
+  const loans=s.loans||[];
+  const sub=!!s.submitted;
+  const totO=loans.reduce((a,l)=>a+Number(l.origAmt||0),0);
+  const totR=loans.reduce((a,l)=>a+Number(l.remainPrincipal||0),0);
+  const totM=loans.reduce((a,l)=>a+Number(l.monthlyPrincipal||0)+Number(l.monthlyInterest||0),0);
+  const stats=loans.length?`<div class="stat-grid sg3" style="margin-bottom:12px">
+    <div class="stat"><div class="stat-label">대출 총액</div><div class="stat-val c-red" style="font-size:15px">${W(totO)}</div></div>
+    <div class="stat"><div class="stat-label">잔여 원금</div><div class="stat-val c-yellow" style="font-size:15px">${W(totR)}</div></div>
+    <div class="stat"><div class="stat-label">월 납입 합계</div><div class="stat-val c-purple" style="font-size:15px">${W(totM)}</div></div>
+  </div>`:'';
+  const typeColor=t=>t==='신용대출'?'blue':t==='담보대출'?'green':(t==='카드론'||t==='현금서비스')?'yellow':'gray';
+  const cards=loans.map((l,i)=>`<div class="sec" style="margin-bottom:10px">
+    <div class="sec-hdr">
+      <div class="sec-title">📄 ${l.lenderName||'대출 '+(i+1)}</div>
+      <div style="display:flex;align-items:center;gap:6px">
+        <span class="tag tag-${typeColor(l.type)}">${l.type||'-'}</span>
+        ${!sub&&role==='husband'?`<button class="xbtn" onclick="debtDelLoan(${i})">×</button>`:''}
+      </div>
+    </div>
+    <div style="padding:12px 16px;display:grid;grid-template-columns:1fr 1fr;gap:8px 16px">
+      ${dFld('② 대출 받은 날짜',l.loanDate)}${dFld('④ 대출금(처음 총액)',W(l.origAmt),'c-red')}
+      ${dFld('⑤ 현재 잔여 원금',W(l.remainPrincipal),'c-yellow')}${dFld('⑥ 이자율',l.rate?l.rate+'%':'-')}
+      ${dFld('⑦ 대출 기간',l.termMonths?l.termMonths+'개월':'-')}${dFld('⑧ 만료일',l.expireDate)}
+      ${dFld('⑨ 월 납입 원금',W(l.monthlyPrincipal))}${dFld('⑨ 월 납입 이자',W(l.monthlyInterest))}
+      ${dFld('⑩ 상환/남은 횟수',(l.repaidCount||'-')+'회 / '+(l.remainCount||'-')+'회')}
+      ${dFld('⑪ 연체 여부',l.overdue,l.overdue&&l.overdue!=='없음'?'c-red':'')}
+      ${dFld('⑫ 담보 여부',l.collateral)}
+      <div style="grid-column:1/-1">${dFld('⑬ 대출 받은 사유',l.reason)}</div>
+    </div>
+  </div>`).join('');
+  if(sub) return dLock(s.submittedAt)+stats+(loans.length?cards:`<div class="empty"><div class="empty-ico">📋</div><p>등록된 대출이 없어요</p></div>`);
+  if(role==='wife') return (loans.length?'':dWait())+stats+cards;
+  const csvCard=`<div class="form-card" style="border:2px dashed var(--blue);background:var(--blue-l);margin-bottom:12px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px"><span style="font-size:22px">📥</span>
+    <div><div style="font-size:13px;font-weight:800;color:var(--blue)">구글 시트로 일괄 등록</div>
+    <div style="font-size:12px;color:var(--t3);margin-top:1px">템플릿 ⬇️ → 구글 시트에 작성 → 파일 &gt; CSV 다운로드 → ⬆️ 업로드</div></div></div>
+    <div style="display:flex;gap:8px">
+      <label for="ds1Up" style="flex:2;padding:11px;background:var(--blue);color:#fff;border-radius:10px;font-size:13px;font-weight:700;text-align:center;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:5px">⬆️ CSV 업로드</label>
+      <input type="file" id="ds1Up" accept=".csv,.xlsx,.xls" style="display:none" onchange="handleDebtUpload(event,'s1')">
+      <button onclick="downloadDebtTmpl('s1')" style="flex:1;padding:11px;background:#fff;color:var(--blue);border:1.5px solid var(--blue);border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">템플릿 ⬇️</button>
+    </div>
+    <div id="ds1Preview"></div>
+  </div>`;
+  const form=`<div class="form-card">
+    <div class="form-ttl">+ 대출 직접 입력</div>
+    <div class="field"><label>① 대출/은행명 · 지인/가족명</label><input id="dl-lender" placeholder="예: 국민은행 · 홍길동 형"></div>
+    <div class="fr2">
+      <div class="field"><label>② 대출 받은 날짜</label><input type="date" id="dl-date"></div>
+      <div class="field"><label>③ 대출 유형</label><select id="dl-type"><option>신용대출</option><option>담보대출</option><option>카드론</option><option>현금서비스</option><option>지인/가족</option><option>기타</option></select></div>
+    </div>
+    <div class="fr2">
+      <div class="field"><label>④ 대출금 (처음 총액)</label><input type="number" id="dl-orig" placeholder="0" inputmode="numeric"></div>
+      <div class="field"><label>⑤ 현재 잔여 원금</label><input type="number" id="dl-remain" placeholder="0" inputmode="numeric"></div>
+    </div>
+    <div class="fr2">
+      <div class="field"><label>⑥ 이자율 (%)</label><input type="number" id="dl-rate" placeholder="4.5" step="0.01" inputmode="decimal"></div>
+      <div class="field"><label>⑦ 대출 기간 (개월)</label><input type="number" id="dl-term" placeholder="36" inputmode="numeric"></div>
+    </div>
+    <div class="fr2">
+      <div class="field"><label>⑧ 만료일</label><input type="date" id="dl-expire"></div>
+      <div class="field"><label>⑨ 월 납입 원금</label><input type="number" id="dl-mp" placeholder="0" inputmode="numeric"></div>
+    </div>
+    <div class="fr2">
+      <div class="field"><label>⑨ 월 납입 이자</label><input type="number" id="dl-mi" placeholder="0" inputmode="numeric"></div>
+      <div class="field"><label>⑩ 상환 횟수</label><input type="number" id="dl-rc" placeholder="12" inputmode="numeric"></div>
+    </div>
+    <div class="fr2">
+      <div class="field"><label>⑩ 남은 횟수</label><input type="number" id="dl-rl" placeholder="24" inputmode="numeric"></div>
+      <div class="field"><label>⑪ 연체 여부</label><select id="dl-over"><option>없음</option><option>1번</option><option>2번</option><option>3번 이상</option></select></div>
+    </div>
+    <div class="fr2">
+      <div class="field"><label>⑫ 담보 여부</label><select id="dl-coll"><option>신용(무담보)</option><option>부동산담보</option><option>자동차담보</option><option>기타담보</option></select></div>
+      <div class="field"><label>⑬ 대출 받은 사유</label><input id="dl-reason" placeholder="예: 생활비 부족"></div>
+    </div>
+    <button class="btn-p purple" onclick="debtAddLoan()">+ 대출 추가</button>
+  </div>`;
+  return csvCard+(loans.length?stats+cards+dSubmitBtn('sheet1',loans.length):'')+form;
+}
+
+// ─── 시트2: 공동명의 / 카드론 / 지인차용 ──────────
+function rDebtS2(){
+  const s=DB.debt?.sheet2||{};
+  const sub=!!s.submitted;
+  const cl=s.cardLoans||[];
+  const pl=s.personalLoans||[];
+  const jointSec=s.jointName?`<div class="sec" style="margin-bottom:10px"><div class="sec-hdr"><div class="sec-title">① 공동명의 여부</div></div><div style="padding:13px 16px;font-size:13px;white-space:pre-line;line-height:1.6">${s.jointName}</div></div>`:'';
+  const clTotal=cl.reduce((a,x)=>a+Number(x.amt||0),0);
+  const clSec=cl.length?`<div class="sec" style="margin-bottom:10px">
+    <div class="sec-hdr"><div class="sec-title">② 카드론 / 현금서비스</div><div class="sec-total">${W(clTotal)}</div></div>
+    ${cl.map((x,i)=>`<div class="li"><div class="li-ico yellow">🃏</div>
+      <div class="li-body"><div class="li-name">${x.company||'-'}</div><div class="li-sub">${x.type||''} ${x.date?'· '+x.date:''}</div></div>
+      <div class="li-r"><div class="li-amt red">${W(x.amt)}</div>${!sub&&role==='husband'?`<button class="xbtn" onclick="debtDelCL(${i})">×</button>`:''}</div>
+    </div>`).join('')}
+  </div>`:(!sub&&role==='husband'?'':'');
+  const plTotal=pl.reduce((a,x)=>a+Number(x.amt||0),0);
+  const plSec=pl.length?`<div class="sec" style="margin-bottom:10px">
+    <div class="sec-hdr"><div class="sec-title">③ 지인/가족 차용</div><div class="sec-total">${W(plTotal)}</div></div>
+    ${pl.map((x,i)=>`<div class="li"><div class="li-ico purple">👥</div>
+      <div class="li-body"><div class="li-name">${x.name||'-'}</div><div class="li-sub">${x.date||''}</div></div>
+      <div class="li-r"><div class="li-amt red">${W(x.amt)}</div>${!sub&&role==='husband'?`<button class="xbtn" onclick="debtDelPL(${i})">×</button>`:''}</div>
+    </div>`).join('')}
+  </div>`:(!sub&&role==='husband'?'':'');
+  if(sub) return dLock(s.submittedAt)+jointSec+clSec+plSec;
+  if(role==='wife') return (s.jointName||cl.length||pl.length?jointSec+clSec+plSec:dWait());
+  const hasData=s.jointName||cl.length||pl.length;
+  const form=`<div class="form-card" style="margin-bottom:12px">
+    <div class="form-ttl">① 공동명의 여부</div>
+    ${dTA('배우자(아내) 명의가 걸려있는 대출이 있나요?','s2-joint',s.jointName,'없으면 "없음" / 있으면 대출명과 내용을 작성해주세요')}
+    <button class="btn-p" style="margin-top:8px" onclick="debtSaveField('sheet2','jointName','s2-joint')">저장</button>
+  </div>
+  <div class="form-card" style="margin-bottom:12px">
+    <div class="form-ttl">② 카드론 / 현금서비스 추가</div>
+    <div class="fr2">
+      <div class="field"><label>카드사</label><input id="cl-co" placeholder="예: 삼성카드"></div>
+      <div class="field"><label>종류</label><select id="cl-type"><option>카드론</option><option>현금서비스</option></select></div>
+    </div>
+    <div class="fr2">
+      <div class="field"><label>금액</label><input type="number" id="cl-amt" placeholder="0" inputmode="numeric"></div>
+      <div class="field"><label>이용일</label><input type="date" id="cl-date"></div>
+    </div>
+    <button class="btn-p purple" onclick="debtAddCL()">+ 추가</button>
+  </div>
+  <div class="form-card" style="margin-bottom:12px">
+    <div class="form-ttl">③ 송희가 모르는 지인/가족 차용</div>
+    <div class="fr2">
+      <div class="field"><label>상대방</label><input id="pl-name" placeholder="예: 홍길동 형"></div>
+      <div class="field"><label>빌린 날짜</label><input type="date" id="pl-date"></div>
+    </div>
+    <div class="field"><label>금액</label><input type="number" id="pl-amt" placeholder="0" inputmode="numeric"></div>
+    <button class="btn-p purple" onclick="debtAddPL()">+ 추가</button>
+  </div>`;
+  return (hasData?jointSec+clSec+plSec+dSubmitBtn('sheet2',cl.length+pl.length):'')+form;
+}
+
+// ─── 시트3: 코인 내역 + 대책안 ────────────────────
+function rDebtS3(){
+  const s=DB.debt?.sheet3||{};
+  const sub=!!s.submitted;
+  const hasData=s.reason||s.whyContinue||s.howDid||s.status||s.plan||s.prevention||s.safeguard;
+  function sv(label,val){return`<div style="margin-bottom:10px"><div style="color:var(--t3);font-size:11px;font-weight:600">${label}</div><div style="font-size:13px;font-weight:600;margin-top:4px;white-space:pre-line;line-height:1.6">${val||'<span style="color:var(--t4)">미작성</span>'}</div></div>`;}
+  const view=`<div class="sec" style="margin-bottom:10px"><div class="sec-hdr"><div class="sec-title">코인 관련 내역</div></div>
+    <div style="padding:14px 16px">${sv('코인 시작 계기',s.reason)}${sv('왜 계속했는지',s.whyContinue)}${sv('어떻게 했는지',s.howDid)}
+    <div style="margin-bottom:10px"><div style="color:var(--t3);font-size:11px;font-weight:600">총 손실 금액</div><div class="c-red" style="font-size:18px;font-weight:800;margin-top:4px">${s.loss?W(s.loss):'미입력'}</div></div>
+    ${sv('현재 본인 상태',s.status)}</div></div>
+  <div class="sec" style="margin-bottom:10px"><div class="sec-hdr"><div class="sec-title">대책안</div></div>
+    <div style="padding:14px 16px">${sv('앞으로 어떻게 할건지',s.plan)}${sv('방지 방안',s.prevention)}${sv('실질적인 안전장치',s.safeguard)}</div></div>`;
+  if(sub) return dLock(s.submittedAt)+view;
+  if(role==='wife') return (hasData?view:dWait());
+  const form=`<div class="form-card" style="margin-bottom:12px">
+    <div class="form-ttl">코인 관련 내역</div>
+    ${dTA('코인 시작 계기','s3-reason',s.reason,'어떤 계기로 코인을 시작하게 됐나요?')}
+    ${dTA('왜 계속했는지','s3-why',s.whyContinue,'왜 계속하게 되었나요?')}
+    ${dTA('어떻게 했는지','s3-how',s.howDid,'어떤 방식으로 진행했나요?')}
+    <div class="field"><label>총 손실 금액</label><input type="number" id="s3-loss" value="${s.loss||''}" placeholder="0" inputmode="numeric"></div>
+    ${dTA('현재 본인 상태','s3-status',s.status,'현재 심리적·재정적 상태를 솔직하게 적어주세요')}
+    <button class="btn-p" onclick="debtSaveS3()">저장</button>
+  </div>
+  <div class="form-card" style="margin-bottom:12px">
+    <div class="form-ttl">대책안</div>
+    ${dTA('앞으로 어떻게 할건지','s3-plan',s.plan,'구체적인 계획을 적어주세요')}
+    ${dTA('방지 방안','s3-prev',s.prevention,'재발 방지를 위한 방안은?')}
+    ${dTA('실질적인 안전장치','s3-safe',s.safeguard,'2G폰 교체 · 앱 제한 · 카드 관리 이전 · 급여 계좌 변경 · 거래소 탈퇴 캡처 등 구체적으로')}
+    <button class="btn-p" onclick="debtSaveS3()">저장</button>
+  </div>`;
+  return (hasData?view+dSubmitBtn('sheet3',1):'')+form;
+}
+
+// ─── 시트4: 월간 고정지출 ────────────────────────
+function rDebtS4(){
+  const s=DB.debt?.sheet4||{};
+  const items=s.items||[];
+  const sub=!!s.submitted;
+  const total=items.reduce((a,x)=>a+Number(x.amt||0),0);
+  const icoOf=c=>c==='대출 상환'?'💳':c==='카드론'?'🃏':c==='보험'?'🛡':c==='통신'?'📱':c==='주거'?'🏠':'📋';
+  const clOf=c=>c==='대출 상환'?'red':c==='카드론'?'yellow':c==='보험'?'green':c==='통신'?'blue':'gray';
+  const cats=[...new Set(items.map(x=>x.cat))];
+  const list=cats.length?cats.map(cat=>{
+    const its=items.filter(x=>x.cat===cat);
+    const catTotal=its.reduce((a,x)=>a+Number(x.amt||0),0);
+    return`<div class="sec" style="margin-bottom:10px">
+      <div class="sec-hdr"><div class="sec-title">${cat}</div><div class="sec-total">${W(catTotal)}</div></div>
+      ${its.map(x=>{const gi=items.indexOf(x);return`<div class="li"><div class="li-ico ${clOf(cat)}">${icoOf(cat)}</div>
+        <div class="li-body"><div class="li-name">${x.name||'-'}</div><div class="li-sub">${x.dueDay?`매월 ${x.dueDay}일 ·`:''} ${x.method||''}</div></div>
+        <div class="li-r"><div class="li-amt red">${W(x.amt)}</div>${!sub&&role==='husband'?`<button class="xbtn" onclick="debtDelFixed(${gi})">×</button>`:''}</div>
+      </div>`;}).join('')}
+    </div>`;
+  }).join(''):`<div class="empty"><div class="empty-ico">📋</div><p>등록된 항목이 없어요</p></div>`;
+  const hero=items.length?`<div class="hero blue" style="margin-bottom:12px"><div class="hero-label">월 고정지출 합계</div><div class="hero-amount">${W(total)}</div><div class="hero-row"><div><div class="hsl">항목 수</div><div class="hsv">${items.length}개</div></div><div><div class="hsl">대출/카드론</div><div class="hsv">${W(items.filter(x=>x.cat==='대출 상환'||x.cat==='카드론').reduce((a,x)=>a+Number(x.amt||0),0))}</div></div></div></div>`:'';
+  if(sub) return dLock(s.submittedAt)+hero+list;
+  if(role==='wife') return (items.length?hero+list:dWait());
+  const csvCard=`<div class="form-card" style="border:2px dashed var(--green);background:var(--green-l);margin-bottom:12px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px"><span style="font-size:22px">📥</span>
+    <div><div style="font-size:13px;font-weight:800;color:var(--green)">구글 시트로 일괄 등록</div>
+    <div style="font-size:12px;color:var(--t3);margin-top:1px">템플릿 ⬇️ → 구글 시트에 작성 → CSV 다운로드 → ⬆️ 업로드</div></div></div>
+    <div style="display:flex;gap:8px">
+      <label for="ds4Up" style="flex:2;padding:11px;background:var(--green);color:#fff;border-radius:10px;font-size:13px;font-weight:700;text-align:center;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:5px">⬆️ CSV 업로드</label>
+      <input type="file" id="ds4Up" accept=".csv,.xlsx,.xls" style="display:none" onchange="handleDebtUpload(event,'s4')">
+      <button onclick="downloadDebtTmpl('s4')" style="flex:1;padding:11px;background:#fff;color:var(--green);border:1.5px solid var(--green);border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">템플릿 ⬇️</button>
+    </div>
+    <div id="ds4Preview"></div>
+  </div>`;
+  const form=`<div class="form-card">
+    <div class="form-ttl">+ 고정지출 직접 입력</div>
+    <div class="fr2">
+      <div class="field"><label>구분</label><select id="fx-cat"><option>대출 상환</option><option>카드론</option><option>보험</option><option>통신</option><option>주거</option><option>구독</option><option>기타</option></select></div>
+      <div class="field"><label>항목명</label><input id="fx-name" placeholder="예: 국민은행 원금"></div>
+    </div>
+    <div class="fr2">
+      <div class="field"><label>금액</label><input type="number" id="fx-amt" placeholder="0" inputmode="numeric"></div>
+      <div class="field"><label>납부일 (매월 N일)</label><input type="number" id="fx-day" placeholder="25" min="1" max="31" inputmode="numeric"></div>
+    </div>
+    <div class="fr2">
+      <div class="field"><label>납부 방법</label><select id="fx-method"><option>자동이체</option><option>직접 납부</option><option>카드 결제</option></select></div>
+      <div class="field"><label>메모</label><input id="fx-note" placeholder="선택 사항"></div>
+    </div>
+    <button class="btn-p green" onclick="debtAddFixed()">+ 추가</button>
+  </div>`;
+  return csvCard+(items.length?hero+list+dSubmitBtn('sheet4',items.length):'')+form;
+}
+
+// ─── 부채 액션 ────────────────────────────────────
+function dEnsure(sheet){if(!DB.debt)DB.debt={};if(!DB.debt[sheet])DB.debt[sheet]={};}
+
+window.debtAddLoan=async function(){
+  const lender=v('dl-lender');
+  if(!lender) return toast('대출/은행명을 입력해주세요','⚠️');
+  dEnsure('sheet1');
+  if(!DB.debt.sheet1.loans) DB.debt.sheet1.loans=[];
+  DB.debt.sheet1.loans.push({
+    lenderName:lender, loanDate:v('dl-date'), type:v('dl-type'),
+    origAmt:Number(v('dl-orig'))||0, remainPrincipal:Number(v('dl-remain'))||0,
+    rate:v('dl-rate'), termMonths:v('dl-term'), expireDate:v('dl-expire'),
+    monthlyPrincipal:Number(v('dl-mp'))||0, monthlyInterest:Number(v('dl-mi'))||0,
+    repaidCount:v('dl-rc'), remainCount:v('dl-rl'),
+    overdue:v('dl-over'), collateral:v('dl-coll'), reason:v('dl-reason'),
+  });
+  await dbSet(P.debt,{sheet1:DB.debt.sheet1});
+  toast(lender+' 추가됐어요','📄');
+  ['dl-lender','dl-date','dl-orig','dl-remain','dl-rate','dl-term','dl-expire','dl-mp','dl-mi','dl-rc','dl-rl','dl-reason'].forEach(i=>{const e=document.getElementById(i);if(e)e.value='';});
+  renderDebt();
+};
+window.debtDelLoan=async function(idx){
+  if(!confirm('삭제할까요?'))return;
+  DB.debt.sheet1.loans.splice(idx,1);
+  await dbSet(P.debt,{sheet1:DB.debt.sheet1});
+  renderDebt();
+};
+window.debtAddCL=async function(){
+  const co=v('cl-co'),amt=Number(v('cl-amt'));
+  if(!co||!amt) return toast('카드사와 금액을 입력해주세요','⚠️');
+  dEnsure('sheet2');
+  if(!DB.debt.sheet2.cardLoans) DB.debt.sheet2.cardLoans=[];
+  DB.debt.sheet2.cardLoans.push({company:co,type:v('cl-type'),amt,date:v('cl-date')});
+  await dbSet(P.debt,{sheet2:DB.debt.sheet2});
+  toast('카드론 추가됐어요','🃏');
+  ['cl-co','cl-amt','cl-date'].forEach(i=>{const e=document.getElementById(i);if(e)e.value='';});
+  renderDebt();
+};
+window.debtDelCL=async function(idx){
+  if(!confirm('삭제할까요?'))return;
+  DB.debt.sheet2.cardLoans.splice(idx,1);
+  await dbSet(P.debt,{sheet2:DB.debt.sheet2});
+  renderDebt();
+};
+window.debtAddPL=async function(){
+  const name=v('pl-name'),amt=Number(v('pl-amt'));
+  if(!name||!amt) return toast('상대방 이름과 금액을 입력해주세요','⚠️');
+  dEnsure('sheet2');
+  if(!DB.debt.sheet2.personalLoans) DB.debt.sheet2.personalLoans=[];
+  DB.debt.sheet2.personalLoans.push({name,amt,date:v('pl-date')});
+  await dbSet(P.debt,{sheet2:DB.debt.sheet2});
+  toast('차용 내역 추가됐어요','👥');
+  ['pl-name','pl-amt','pl-date'].forEach(i=>{const e=document.getElementById(i);if(e)e.value='';});
+  renderDebt();
+};
+window.debtDelPL=async function(idx){
+  if(!confirm('삭제할까요?'))return;
+  DB.debt.sheet2.personalLoans.splice(idx,1);
+  await dbSet(P.debt,{sheet2:DB.debt.sheet2});
+  renderDebt();
+};
+window.debtSaveField=async function(sheet,field,inputId){
+  const val=document.getElementById(inputId)?.value||'';
+  dEnsure(sheet);
+  DB.debt[sheet][field]=val;
+  await dbSet(P.debt,{[sheet]:DB.debt[sheet]});
+  toast('저장됐어요','✅',1500);
+  renderDebt();
+};
+window.debtSaveS3=async function(){
+  dEnsure('sheet3');
+  const s=DB.debt.sheet3;
+  const r=(id,fb)=>document.getElementById(id)?.value||fb||'';
+  s.reason=r('s3-reason',s.reason); s.whyContinue=r('s3-why',s.whyContinue);
+  s.howDid=r('s3-how',s.howDid);
+  s.loss=Number(document.getElementById('s3-loss')?.value)||s.loss||0;
+  s.status=r('s3-status',s.status); s.plan=r('s3-plan',s.plan);
+  s.prevention=r('s3-prev',s.prevention); s.safeguard=r('s3-safe',s.safeguard);
+  await dbSet(P.debt,{sheet3:s});
+  toast('저장됐어요','✅',1500);
+  renderDebt();
+};
+window.debtAddFixed=async function(){
+  const name=v('fx-name'),amt=Number(v('fx-amt'));
+  if(!name||!amt) return toast('항목명과 금액을 입력해주세요','⚠️');
+  dEnsure('sheet4');
+  if(!DB.debt.sheet4.items) DB.debt.sheet4.items=[];
+  DB.debt.sheet4.items.push({cat:v('fx-cat'),name,amt,dueDay:v('fx-day'),method:v('fx-method'),note:v('fx-note')});
+  await dbSet(P.debt,{sheet4:DB.debt.sheet4});
+  toast(name+' 추가됐어요','📋');
+  ['fx-name','fx-amt','fx-day','fx-note'].forEach(i=>{const e=document.getElementById(i);if(e)e.value='';});
+  renderDebt();
+};
+window.debtDelFixed=async function(idx){
+  if(!confirm('삭제할까요?'))return;
+  DB.debt.sheet4.items.splice(idx,1);
+  await dbSet(P.debt,{sheet4:DB.debt.sheet4});
+  renderDebt();
+};
+window.debtSubmit=async function(sheet){
+  if(!confirm('정말 최종 제출할까요?\n제출 후에는 절대 수정할 수 없어요.'))return;
+  dEnsure(sheet);
+  DB.debt[sheet].submitted=true;
+  DB.debt[sheet].submittedAt=new Date().toISOString();
+  await dbSet(P.debt,{[sheet]:DB.debt[sheet]});
+  toast('제출 완료! 이제 수정할 수 없어요.','🔒',4000);
+  renderDebt();
+};
+
+// ─── 부채 CSV 업로드 / 템플릿 ────────────────────
+let debtPrev=[], debtPrevType='';
+window.handleDebtUpload=async function(e,type){
+  const file=e.target.files[0]; if(!file)return;
+  const prevId=type==='s1'?'ds1Preview':'ds4Preview';
+  const prev=document.getElementById(prevId);
+  if(prev) prev.innerHTML=`<div style="margin-top:10px;text-align:center;color:var(--t3);font-size:13px">⏳ 읽는 중...</div>`;
+  try{
+    const XLSX=await loadSheetJS();
+    const buf=await file.arrayBuffer();
+    const wb=XLSX.read(buf,{type:'array'});
+    const ws=wb.Sheets[wb.SheetNames[0]];
+    const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+    let parsed=[];
+    if(type==='s1'){
+      const di=rows.findIndex(r=>String(r[0]).includes('대출'))>=0?rows.findIndex(r=>String(r[0]).includes('대출'))+1:1;
+      for(let i=di;i<rows.length;i++){
+        const r=rows[i]; const name=String(r[0]||'').trim(); if(!name)continue;
+        parsed.push({lenderName:name,loanDate:String(r[1]||''),type:String(r[2]||'신용대출'),
+          origAmt:Number(String(r[3]||'0').replace(/[^0-9.-]/g,'')),
+          remainPrincipal:Number(String(r[4]||'0').replace(/[^0-9.-]/g,'')),
+          rate:String(r[5]||''),termMonths:String(r[6]||''),expireDate:String(r[7]||''),
+          monthlyPrincipal:Number(String(r[8]||'0').replace(/[^0-9.-]/g,'')),
+          monthlyInterest:Number(String(r[9]||'0').replace(/[^0-9.-]/g,'')),
+          repaidCount:String(r[10]||''),remainCount:String(r[11]||''),
+          overdue:String(r[12]||'없음'),collateral:String(r[13]||'신용(무담보)'),reason:String(r[14]||''),
+        });
+      }
+    } else {
+      const di=rows.findIndex(r=>String(r[0]).includes('구분'))>=0?rows.findIndex(r=>String(r[0]).includes('구분'))+1:1;
+      for(let i=di;i<rows.length;i++){
+        const r=rows[i]; const name=String(r[1]||r[0]||'').trim(); const amt=Number(String(r[2]||'0').replace(/[^0-9.-]/g,''));
+        if(!name||!amt)continue;
+        parsed.push({cat:String(r[0]||'기타').trim(),name,amt,dueDay:String(r[3]||'').replace(/[^0-9]/g,''),method:String(r[4]||'자동이체'),note:String(r[5]||'')});
+      }
+    }
+    if(!parsed.length){if(prev)prev.innerHTML=`<div style="margin-top:10px;background:var(--red-l);border-radius:10px;padding:12px;color:var(--red);font-size:13px;font-weight:600">⚠️ 유효한 데이터가 없어요. 템플릿 형식을 확인해주세요.</div>`;e.target.value='';return;}
+    debtPrev=parsed; debtPrevType=type;
+    const total=parsed.reduce((s,it)=>s+(it.origAmt||it.amt||0),0);
+    if(prev) prev.innerHTML=`<div style="margin-top:12px;border-radius:12px;overflow:hidden;border:1px solid var(--border)">
+      <div style="background:var(--sf2);padding:10px 14px;font-size:13px;font-weight:700">${parsed.length}개 미리보기 · ${W(total)}</div>
+      <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">
+        <tbody>${parsed.map(it=>`<tr style="border-bottom:1px solid var(--border)"><td style="padding:8px 10px;font-size:13px">${it.lenderName||it.name}</td><td style="padding:8px 6px;font-size:11px;color:var(--t3)">${it.type||it.cat||''}</td><td style="padding:8px 10px;font-size:13px;font-weight:700;text-align:right;color:var(--red)">${W(it.origAmt||it.amt)}</td></tr>`).join('')}</tbody>
+      </table></div>
+      <div style="padding:12px;border-top:1px solid var(--border)">
+        <button onclick="confirmDebtUpload()" style="width:100%;padding:12px;background:var(--green);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit">✅ ${parsed.length}개 전체 등록</button>
+      </div>
+    </div>`;
+  }catch(err){console.error(err);if(prev)prev.innerHTML=`<div style="margin-top:10px;background:var(--red-l);border-radius:10px;padding:12px;color:var(--red);font-size:13px;font-weight:600">⚠️ 파일을 읽지 못했어요</div>`;}
+  e.target.value='';
+};
+window.confirmDebtUpload=async function(){
+  if(!debtPrev.length)return;
+  if(debtPrevType==='s1'){
+    dEnsure('sheet1');
+    if(!DB.debt.sheet1.loans) DB.debt.sheet1.loans=[];
+    DB.debt.sheet1.loans=[...DB.debt.sheet1.loans,...debtPrev];
+    await dbSet(P.debt,{sheet1:DB.debt.sheet1});
+    toast(debtPrev.length+'개 대출 등록됐어요','✅',3000);
+  } else {
+    dEnsure('sheet4');
+    if(!DB.debt.sheet4.items) DB.debt.sheet4.items=[];
+    DB.debt.sheet4.items=[...DB.debt.sheet4.items,...debtPrev];
+    await dbSet(P.debt,{sheet4:DB.debt.sheet4});
+    toast(debtPrev.length+'개 고정지출 등록됐어요','✅',3000);
+  }
+  debtPrev=[]; debtPrevType='';
+  renderDebt();
+};
+window.downloadDebtTmpl=function(type){
+  let headers=[],rows=[],filename='';
+  if(type==='s1'){
+    headers=['①대출처(은행/기관/지인가족명)','②대출받은날짜','③대출유형','④대출금(처음총액)','⑤현재잔여원금','⑥이자율(%)','⑦대출기간(개월)','⑧만료일','⑨월납입원금','⑨월납입이자','⑩상환횟수','⑩남은횟수','⑪연체여부','⑫담보여부','⑬대출받은사유'];
+    rows=[
+      ['국민은행','2023-01-15','신용대출','30000000','25000000','4.5','36','2026-01-15','800000','93750','12','24','없음','신용(무담보)','생활비'],
+      ['삼성카드 카드론','2023-06-01','카드론','5000000','3000000','15','24','2025-06-01','200000','37500','6','18','없음','신용(무담보)','긴급자금'],
+      ['홍길동 형','2022-03-01','지인/가족','3000000','3000000','0','','','0','0','0','0','없음','신용(무담보)','생활비 부족'],
+    ];
+    filename='대출현황_등록템플릿.csv';
+  } else {
+    headers=['구분','항목명','금액','납부일(매월N일)','납부방법','메모'];
+    rows=[
+      ['대출 상환','국민은행 대출 원금','800000','25','자동이체',''],
+      ['대출 상환','국민은행 대출 이자','93750','25','자동이체',''],
+      ['카드론','삼성카드 카드론','237500','15','자동이체',''],
+      ['보험','실손보험','85000','1','자동이체',''],
+      ['통신','휴대폰(본인)','55000','20','자동이체','SKT'],
+      ['주거','아파트 관리비','120000','25','자동이체',''],
+    ];
+    filename='월간고정지출_등록템플릿.csv';
+  }
+  const BOM='﻿';
+  const csv=[headers,...rows].map(r=>r.map(c=>`"${c}"`).join(',')).join('\n');
+  const blob=new Blob([BOM+csv],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=filename; a.click();
+  toast(filename+' 다운로드됐어요!','📥',2500);
+};
 
 // ━━ EXCEL UPLOAD / DOWNLOAD ━━━━━━━━━━━━━━━━━━━━
 async function loadSheetJS() {
