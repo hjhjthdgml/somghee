@@ -936,86 +936,139 @@ function rDebtS1(){
 function rDebtS2(){
   const s=DB.debt?.sheet2||{};
   const sub=!!s.submitted;
+  const ji=s.jointItems||[];
   const cl=s.cardLoans||[];
   const pl=s.personalLoans||[];
-  const jointSec=s.jointName?`<div class="sec" style="margin-bottom:10px"><div class="sec-hdr"><div class="sec-title">① 공동명의 여부</div></div><div style="padding:13px 16px;font-size:13px;white-space:pre-line;line-height:1.6">${s.jointName}</div></div>`:'';
+
+  // 공동명의 섹션
+  const jiSec=ji.length?`<div class="sec" style="margin-bottom:10px">
+    <div class="sec-hdr"><div class="sec-title">① 공동명의 여부</div><div class="sec-total">${W(ji.reduce((a,x)=>a+Number(x.amount||0),0))}</div></div>
+    ${ji.map((x,i)=>`<div class="li"><div class="li-ico blue">📝</div>
+      <div class="li-body"><div class="li-name">${x.name||'-'}</div>
+      <div class="li-sub"><span class="tag tag-${x.hasJoint==='있음'?'red':'gray'}">${x.hasJoint||'-'}</span> ${x.jointType||''} ${x.note?'· '+x.note:''}</div></div>
+      <div class="li-r"><div class="li-amt red">${x.amount?W(x.amount):'-'}</div>${!sub&&role==='husband'?`<button class="xbtn" onclick="debtDelJoint(${i})">×</button>`:''}</div>
+    </div>`).join('')}
+  </div>`:'';
+
+  // 카드론 섹션
   const clTotal=cl.reduce((a,x)=>a+Number(x.amt||0),0);
   const clSec=cl.length?`<div class="sec" style="margin-bottom:10px">
     <div class="sec-hdr"><div class="sec-title">② 카드론 / 현금서비스</div><div class="sec-total">${W(clTotal)}</div></div>
     ${cl.map((x,i)=>`<div class="li"><div class="li-ico yellow">🃏</div>
-      <div class="li-body"><div class="li-name">${x.company||'-'}</div><div class="li-sub">${x.type||''} ${x.date?'· '+x.date:''}</div></div>
+      <div class="li-body"><div class="li-name">${x.company||'-'}</div>
+      <div class="li-sub">${x.type||''} ${x.date?'· '+x.date:''}</div>
+      <div class="li-sub">현재잔액 <strong>${W(x.balance)}</strong> · 월납입 <strong>${W(x.monthly)}</strong></div></div>
       <div class="li-r"><div class="li-amt red">${W(x.amt)}</div>${!sub&&role==='husband'?`<button class="xbtn" onclick="debtDelCL(${i})">×</button>`:''}</div>
     </div>`).join('')}
-  </div>`:(!sub&&role==='husband'?'':'');
+  </div>`:'';
+
+  // 지인/가족 차용 섹션
   const plTotal=pl.reduce((a,x)=>a+Number(x.amt||0),0);
   const plSec=pl.length?`<div class="sec" style="margin-bottom:10px">
     <div class="sec-hdr"><div class="sec-title">③ 지인/가족 차용</div><div class="sec-total">${W(plTotal)}</div></div>
     ${pl.map((x,i)=>`<div class="li"><div class="li-ico purple">👥</div>
-      <div class="li-body"><div class="li-name">${x.name||'-'}</div><div class="li-sub">${x.date||''}</div></div>
+      <div class="li-body"><div class="li-name">${x.name||'-'}</div>
+      <div class="li-sub">빌린날짜 ${x.date||'-'} · 상환약속 ${x.repayDate||'-'}</div>
+      ${x.status?`<div class="li-sub" style="color:var(--t2)">${x.status}</div>`:''}
+      </div>
       <div class="li-r"><div class="li-amt red">${W(x.amt)}</div>${!sub&&role==='husband'?`<button class="xbtn" onclick="debtDelPL(${i})">×</button>`:''}</div>
     </div>`).join('')}
-  </div>`:(!sub&&role==='husband'?'':'');
-  if(sub) return dLock(s.submittedAt)+jointSec+clSec+plSec;
-  if(role==='wife') return (s.jointName||cl.length||pl.length?jointSec+clSec+plSec:dWait());
-  const hasData=s.jointName||cl.length||pl.length;
+  </div>`:'';
+
+  if(sub) return dLock(s.submittedAt)+jiSec+clSec+plSec;
+  if(role==='wife') return (ji.length||cl.length||pl.length?jiSec+clSec+plSec:dWait());
+
+  const hasData=ji.length||cl.length||pl.length;
   const form=`<div class="form-card" style="margin-bottom:12px">
-    <div class="form-ttl">① 공동명의 여부</div>
-    ${dTA('배우자(아내) 명의가 걸려있는 대출이 있나요?','s2-joint',s.jointName,'없으면 "없음" / 있으면 대출명과 내용을 작성해주세요')}
-    <button class="btn-p" style="margin-top:8px" onclick="debtSaveField('sheet2','jointName','s2-joint')">저장</button>
+    <div class="form-ttl">① 공동명의 여부 추가</div>
+    <div class="field"><label>항목 (대출/자산명)</label><input id="jt-name" placeholder="예: 전세 대출, 자동차 할부"></div>
+    <div class="fr2">
+      <div class="field"><label>공동명의 여부</label><select id="jt-has"><option>없음</option><option>있음</option></select></div>
+      <div class="field"><label>명의 형태</label><input id="jt-type" placeholder="예: 배우자 공동명의"></div>
+    </div>
+    <div class="fr2">
+      <div class="field"><label>금액</label><input type="number" id="jt-amt" placeholder="0" inputmode="numeric"></div>
+      <div class="field"><label>비고</label><input id="jt-note" placeholder="선택 사항"></div>
+    </div>
+    <button class="btn-p purple" onclick="debtAddJoint()">+ 추가</button>
   </div>
   <div class="form-card" style="margin-bottom:12px">
     <div class="form-ttl">② 카드론 / 현금서비스 추가</div>
     <div class="fr2">
       <div class="field"><label>카드사</label><input id="cl-co" placeholder="예: 삼성카드"></div>
-      <div class="field"><label>종류</label><select id="cl-type"><option>카드론</option><option>현금서비스</option></select></div>
+      <div class="field"><label>구분</label><select id="cl-type"><option>카드론</option><option>현금서비스</option></select></div>
     </div>
     <div class="fr2">
-      <div class="field"><label>금액</label><input type="number" id="cl-amt" placeholder="0" inputmode="numeric"></div>
+      <div class="field"><label>이용금액</label><input type="number" id="cl-amt" placeholder="0" inputmode="numeric"></div>
       <div class="field"><label>이용일</label><input type="date" id="cl-date"></div>
+    </div>
+    <div class="fr2">
+      <div class="field"><label>현재 잔액</label><input type="number" id="cl-bal" placeholder="0" inputmode="numeric"></div>
+      <div class="field"><label>월 납입액</label><input type="number" id="cl-mo" placeholder="0" inputmode="numeric"></div>
     </div>
     <button class="btn-p purple" onclick="debtAddCL()">+ 추가</button>
   </div>
   <div class="form-card" style="margin-bottom:12px">
     <div class="form-ttl">③ 송희가 모르는 지인/가족 차용</div>
     <div class="fr2">
-      <div class="field"><label>상대방</label><input id="pl-name" placeholder="예: 홍길동 형"></div>
-      <div class="field"><label>빌린 날짜</label><input type="date" id="pl-date"></div>
+      <div class="field"><label>상대방 (관계)</label><input id="pl-name" placeholder="예: 홍길동 형"></div>
+      <div class="field"><label>금액</label><input type="number" id="pl-amt" placeholder="0" inputmode="numeric"></div>
     </div>
-    <div class="field"><label>금액</label><input type="number" id="pl-amt" placeholder="0" inputmode="numeric"></div>
+    <div class="fr2">
+      <div class="field"><label>빌린 날짜</label><input type="date" id="pl-date"></div>
+      <div class="field"><label>상환 약속일</label><input type="date" id="pl-repay"></div>
+    </div>
+    <div class="field"><label>현재 상황</label><input id="pl-status" placeholder="예: 미상환 중 / 일부 상환 중"></div>
     <button class="btn-p purple" onclick="debtAddPL()">+ 추가</button>
   </div>`;
-  const s2msg=(cl.length+pl.length)+'건 등록'+(s.jointName?' · 공동명의 작성':'');
-  return (hasData?jointSec+clSec+plSec+dSubmitBtn('sheet2',0,s2msg):'')+form;
+  const s2msg=(ji.length+cl.length+pl.length)+'건 등록';
+  return (hasData?jiSec+clSec+plSec+dSubmitBtn('sheet2',0,s2msg):'')+form;
 }
 
 // ─── 시트3: 코인 내역 + 대책안 ────────────────────
 function rDebtS3(){
   const s=DB.debt?.sheet3||{};
   const sub=!!s.submitted;
-  const hasData=s.reason||s.whyContinue||s.howDid||s.loss||s.status||s.plan||s.prevention||s.safeguard;
+  const hasData=s.reason||s.whyContinue||s.howDid||s.loss||s.startPeriod||s.status||s.plan||s.prevention||s.mindset||s.safeguard||s.promise;
   function sv(label,val){return`<div style="margin-bottom:10px"><div style="color:var(--t3);font-size:11px;font-weight:600">${label}</div><div style="font-size:13px;font-weight:600;margin-top:4px;white-space:pre-line;line-height:1.6">${val||'<span style="color:var(--t4)">미작성</span>'}</div></div>`;}
-  const view=`<div class="sec" style="margin-bottom:10px"><div class="sec-hdr"><div class="sec-title">코인 관련 내역</div></div>
-    <div style="padding:14px 16px">${sv('코인 시작 계기',s.reason)}${sv('왜 계속했는지',s.whyContinue)}${sv('어떻게 했는지',s.howDid)}
-    <div style="margin-bottom:10px"><div style="color:var(--t3);font-size:11px;font-weight:600">총 손실 금액</div><div class="c-red" style="font-size:18px;font-weight:800;margin-top:4px">${s.loss?W(s.loss):'미입력'}</div></div>
-    ${sv('현재 본인 상태',s.status)}</div></div>
-  <div class="sec" style="margin-bottom:10px"><div class="sec-hdr"><div class="sec-title">대책안</div></div>
-    <div style="padding:14px 16px">${sv('앞으로 어떻게 할건지',s.plan)}${sv('방지 방안',s.prevention)}${sv('실질적인 안전장치',s.safeguard)}</div></div>`;
+  const view=`<div class="sec" style="margin-bottom:10px"><div class="sec-hdr"><div class="sec-title">▶ PART 1. 코인 투자 경위 및 현 상태</div></div>
+    <div style="padding:14px 16px">
+      ${sv('코인을 시작하게 된 계기',s.reason)}
+      ${sv('왜 계속했는지',s.whyContinue)}
+      ${sv('어떻게 투자했는지 (거래소·종목·방식 등)',s.howDid)}
+      <div style="margin-bottom:10px"><div style="color:var(--t3);font-size:11px;font-weight:600">총 손실 금액</div><div class="c-red" style="font-size:18px;font-weight:800;margin-top:4px">${s.loss?W(s.loss):'미입력'}</div></div>
+      ${sv('코인 시작 시점',s.startPeriod)}
+      ${sv('현재 본인의 심리 상태',s.status)}
+    </div></div>
+  <div class="sec" style="margin-bottom:10px"><div class="sec-hdr"><div class="sec-title">▶ PART 2. 재발 방지 대책안</div></div>
+    <div style="padding:14px 16px">
+      ${sv('앞으로 어떻게 할 것인지 (단기/중장기 계획)',s.plan)}
+      ${sv('재발 방지 방안 (구체적 행동 계획)',s.prevention)}
+      ${sv('마인드 세팅 (본인이 다짐한 것)',s.mindset)}
+      ${sv('실질적인 안전장치',s.safeguard)}
+      ${sv('송희에게 약속하는 것 (구체적으로)',s.promise)}
+    </div></div>`;
   if(sub) return dLock(s.submittedAt)+view;
   if(role==='wife') return (hasData?view:dWait());
   const form=`<div class="form-card" style="margin-bottom:12px">
-    <div class="form-ttl">코인 관련 내역</div>
-    ${dTA('코인 시작 계기','s3-reason',s.reason,'어떤 계기로 코인을 시작하게 됐나요?')}
+    <div class="form-ttl">▶ PART 1. 코인 투자 경위 및 현 상태</div>
+    ${dTA('코인을 시작하게 된 계기','s3-reason',s.reason,'어떤 계기로 시작하게 됐나요?')}
     ${dTA('왜 계속했는지','s3-why',s.whyContinue,'왜 계속하게 되었나요?')}
-    ${dTA('어떻게 했는지','s3-how',s.howDid,'어떤 방식으로 진행했나요?')}
-    <div class="field"><label>총 손실 금액</label><input type="number" id="s3-loss" value="${s.loss||''}" placeholder="0" inputmode="numeric"></div>
-    ${dTA('현재 본인 상태','s3-status',s.status,'현재 심리적·재정적 상태를 솔직하게 적어주세요')}
+    ${dTA('어떻게 투자했는지 (거래소·종목·방식 등)','s3-how',s.howDid,'사용한 거래소, 종목, 방식을 구체적으로')}
+    <div class="fr2">
+      <div class="field"><label>총 손실 금액</label><input type="number" id="s3-loss" value="${s.loss||''}" placeholder="0" inputmode="numeric"></div>
+      <div class="field"><label>코인 시작 시점</label><input id="s3-start" value="${s.startPeriod||''}" placeholder="예: 2022년 3월"></div>
+    </div>
+    ${dTA('현재 본인의 심리 상태','s3-status',s.status,'현재 상태를 솔직하게 적어주세요')}
     <button class="btn-p" onclick="debtSaveS3()">저장</button>
   </div>
   <div class="form-card" style="margin-bottom:12px">
-    <div class="form-ttl">대책안</div>
-    ${dTA('앞으로 어떻게 할건지','s3-plan',s.plan,'구체적인 계획을 적어주세요')}
-    ${dTA('방지 방안','s3-prev',s.prevention,'재발 방지를 위한 방안은?')}
-    ${dTA('실질적인 안전장치','s3-safe',s.safeguard,'2G폰 교체 · 앱 제한 · 카드 관리 이전 · 급여 계좌 변경 · 거래소 탈퇴 캡처 등 구체적으로')}
+    <div class="form-ttl">▶ PART 2. 재발 방지 대책안</div>
+    ${dTA('앞으로 어떻게 할 것인지 (단기/중장기 계획)','s3-plan',s.plan,'구체적인 계획을 적어주세요')}
+    ${dTA('재발 방지 방안 (구체적 행동 계획)','s3-prev',s.prevention,'무엇을 어떻게 할건지 구체적으로')}
+    ${dTA('마인드 세팅 (본인이 다짐한 것)','s3-mind',s.mindset,'본인이 스스로에게 다짐하는 내용')}
+    ${dTA('실질적인 안전장치','s3-safe',s.safeguard,'2G폰 교체 · 앱 제한 · 카드 관리 이전 · 급여 계좌 변경 · 거래소 탈퇴 캡처 등')}
+    ${dTA('송희에게 약속하는 것 (구체적으로)','s3-promise',s.promise,'송희가 확인하는 항목입니다. 구체적으로 작성해주세요')}
     <button class="btn-p" onclick="debtSaveS3()">저장</button>
   </div>`;
   return (hasData?view+dSubmitBtn('sheet3',0,'작성한 내용을 최종 제출해요.'):'')+form;
@@ -1027,8 +1080,8 @@ function rDebtS4(){
   const items=s.items||[];
   const sub=!!s.submitted;
   const total=items.reduce((a,x)=>a+Number(x.amt||0),0);
-  const icoOf=c=>c==='대출 상환'?'💳':c==='카드론'?'🃏':c==='보험'?'🛡':c==='통신'?'📱':c==='주거'?'🏠':'📋';
-  const clOf=c=>c==='대출 상환'?'red':c==='카드론'?'yellow':c==='보험'?'green':c==='통신'?'blue':'gray';
+  const icoOf=c=>c==='대출 상환'?'💳':c==='카드론/현금서비스'?'🃏':c==='보험'?'🛡':c==='통신'?'📱':c==='주거/관리비'?'🏠':c==='교육/육아'?'📚':c==='생활비'?'🛒':'📋';
+  const clOf=c=>c==='대출 상환'?'red':c==='카드론/현금서비스'?'yellow':c==='보험'?'green':c==='통신'?'blue':c==='교육/육아'?'purple':'gray';
   const cats=[...new Set(items.map(x=>x.cat))];
   const list=cats.length?cats.map(cat=>{
     const its=items.filter(x=>x.cat===cat);
@@ -1058,7 +1111,7 @@ function rDebtS4(){
   const form=`<div class="form-card">
     <div class="form-ttl">+ 고정지출 직접 입력</div>
     <div class="fr2">
-      <div class="field"><label>구분</label><select id="fx-cat"><option>대출 상환</option><option>카드론</option><option>보험</option><option>통신</option><option>주거</option><option>구독</option><option>기타</option></select></div>
+      <div class="field"><label>구분</label><select id="fx-cat"><option>대출 상환</option><option>카드론/현금서비스</option><option>보험</option><option>주거/관리비</option><option>통신</option><option>교육/육아</option><option>생활비</option><option>구독</option><option>기타</option></select></div>
       <div class="field"><label>항목명</label><input id="fx-name" placeholder="예: 국민은행 원금"></div>
     </div>
     <div class="fr2">
@@ -1101,15 +1154,32 @@ window.debtDelLoan=async function(idx){
   await dbSet(P.debt,{sheet1:DB.debt.sheet1});
   renderDebt();
 };
+window.debtAddJoint=async function(){
+  const name=v('jt-name');
+  if(!name) return toast('항목명을 입력해주세요','⚠️');
+  dEnsure('sheet2');
+  if(!DB.debt.sheet2.jointItems) DB.debt.sheet2.jointItems=[];
+  DB.debt.sheet2.jointItems.push({name,hasJoint:v('jt-has'),jointType:v('jt-type'),amount:Number(v('jt-amt'))||0,note:v('jt-note')});
+  await dbSet(P.debt,{sheet2:DB.debt.sheet2});
+  toast('공동명의 항목 추가됐어요','📝');
+  ['jt-name','jt-type','jt-amt','jt-note'].forEach(i=>{const e=document.getElementById(i);if(e)e.value='';});
+  renderDebt();
+};
+window.debtDelJoint=async function(idx){
+  if(!confirm('삭제할까요?'))return;
+  DB.debt.sheet2.jointItems.splice(idx,1);
+  await dbSet(P.debt,{sheet2:DB.debt.sheet2});
+  renderDebt();
+};
 window.debtAddCL=async function(){
   const co=v('cl-co'),amt=Number(v('cl-amt'));
   if(!co||!amt) return toast('카드사와 금액을 입력해주세요','⚠️');
   dEnsure('sheet2');
   if(!DB.debt.sheet2.cardLoans) DB.debt.sheet2.cardLoans=[];
-  DB.debt.sheet2.cardLoans.push({company:co,type:v('cl-type'),amt,date:v('cl-date')});
+  DB.debt.sheet2.cardLoans.push({company:co,type:v('cl-type'),amt,date:v('cl-date'),balance:Number(v('cl-bal'))||0,monthly:Number(v('cl-mo'))||0});
   await dbSet(P.debt,{sheet2:DB.debt.sheet2});
   toast('카드론 추가됐어요','🃏');
-  ['cl-co','cl-amt','cl-date'].forEach(i=>{const e=document.getElementById(i);if(e)e.value='';});
+  ['cl-co','cl-amt','cl-date','cl-bal','cl-mo'].forEach(i=>{const e=document.getElementById(i);if(e)e.value='';});
   renderDebt();
 };
 window.debtDelCL=async function(idx){
@@ -1123,10 +1193,10 @@ window.debtAddPL=async function(){
   if(!name||!amt) return toast('상대방 이름과 금액을 입력해주세요','⚠️');
   dEnsure('sheet2');
   if(!DB.debt.sheet2.personalLoans) DB.debt.sheet2.personalLoans=[];
-  DB.debt.sheet2.personalLoans.push({name,amt,date:v('pl-date')});
+  DB.debt.sheet2.personalLoans.push({name,amt,date:v('pl-date'),repayDate:v('pl-repay'),status:v('pl-status')});
   await dbSet(P.debt,{sheet2:DB.debt.sheet2});
   toast('차용 내역 추가됐어요','👥');
-  ['pl-name','pl-amt','pl-date'].forEach(i=>{const e=document.getElementById(i);if(e)e.value='';});
+  ['pl-name','pl-amt','pl-date','pl-repay','pl-status'].forEach(i=>{const e=document.getElementById(i);if(e)e.value='';});
   renderDebt();
 };
 window.debtDelPL=async function(idx){
@@ -1150,8 +1220,10 @@ window.debtSaveS3=async function(){
   s.reason=r('s3-reason',s.reason); s.whyContinue=r('s3-why',s.whyContinue);
   s.howDid=r('s3-how',s.howDid);
   s.loss=Number(document.getElementById('s3-loss')?.value)||s.loss||0;
+  s.startPeriod=r('s3-start',s.startPeriod);
   s.status=r('s3-status',s.status); s.plan=r('s3-plan',s.plan);
-  s.prevention=r('s3-prev',s.prevention); s.safeguard=r('s3-safe',s.safeguard);
+  s.prevention=r('s3-prev',s.prevention); s.mindset=r('s3-mind',s.mindset);
+  s.safeguard=r('s3-safe',s.safeguard); s.promise=r('s3-promise',s.promise);
   await dbSet(P.debt,{sheet3:s});
   toast('저장됐어요','✅',1500);
   renderDebt();
