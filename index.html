@@ -293,7 +293,7 @@ async function initFB() {
 const LS={get:k=>{try{return JSON.parse(localStorage.getItem('hh_'+k))}catch{return null}},set:(k,v)=>{try{localStorage.setItem('hh_'+k,JSON.stringify(v))}catch{}}};
 const lk=p=>p.replace(/\//g,'_');
 async function dbGet(p){
-  if(fbFns){const d=await fbFns.get(p).catch(()=>null);if(d)LS.set(lk(p),d);return d;}
+  if(fbFns){const d=await fbFns.get(p).catch(()=>null);if(d){LS.set(lk(p),d);return d;}}
   return LS.get(lk(p));
 }
 async function dbSet(p,data){
@@ -846,7 +846,7 @@ function renderDebt(){
 }
 function dLock(at){return`<div style="background:var(--red-l);border:1px solid rgba(240,68,82,.2);border-radius:12px;padding:12px 16px;margin-bottom:12px;display:flex;gap:10px;align-items:center"><span style="font-size:20px">🔒</span><div><div style="font-size:13px;font-weight:800;color:var(--red)">제출 완료 — 수정 불가</div><div style="font-size:11px;color:var(--t2);margin-top:2px">${at?new Date(at).toLocaleString('ko-KR',{dateStyle:'short',timeStyle:'short'}):''}에 제출됨</div></div></div>`;}
 function dWait(){return`<div class="notice yellow"><strong>⏳ 남편이 아직 작성 전이에요</strong>남편이 제출하면 여기서 확인할 수 있어요.</div>`;}
-function dSubmitBtn(sheet,n){return`<div style="background:var(--red-l);border:1px solid rgba(240,68,82,.2);border-radius:12px;padding:16px;margin-bottom:12px"><div style="font-size:13px;font-weight:800;color:var(--red);margin-bottom:5px">⚠️ 제출 전 확인</div><div style="font-size:12px;color:var(--t2);margin-bottom:12px;line-height:1.6">제출 후에는 수정할 수 없어요. ${n}개 항목이 등록돼 있어요.</div><button class="btn-p" style="background:var(--red);margin-top:0" onclick="debtSubmit('${sheet}')">최종 제출 (수정 불가)</button></div>`;}
+function dSubmitBtn(sheet,n,msg){return`<div style="background:var(--red-l);border:1px solid rgba(240,68,82,.2);border-radius:12px;padding:16px;margin-bottom:12px"><div style="font-size:13px;font-weight:800;color:var(--red);margin-bottom:5px">⚠️ 제출 전 확인</div><div style="font-size:12px;color:var(--t2);margin-bottom:12px;line-height:1.6">제출 후에는 수정할 수 없어요.<br>${msg||n+'개 항목이 등록돼 있어요.'}</div><button class="btn-p" style="background:var(--red);margin-top:0" onclick="debtSubmit('${sheet}')">최종 제출 (수정 불가)</button></div>`;}
 function dFld(label,val,cls){return`<div><span style="color:var(--t3);font-size:11px;font-weight:600">${label}</span><div class="${cls||''}" style="font-size:13px;font-weight:600;margin-top:2px;word-break:break-all">${val||'-'}</div></div>`;}
 function dTA(label,id,val,ph){return`<div class="field"><label>${label}</label><textarea id="${id}" rows="3" style="width:100%;background:var(--sf2);border:1.5px solid transparent;border-radius:9px;padding:11px 13px;font-size:14px;font-family:inherit;color:var(--t1);outline:none;resize:vertical" placeholder="${ph||''}">${val||''}</textarea></div>`;}
 
@@ -984,14 +984,15 @@ function rDebtS2(){
     <div class="field"><label>금액</label><input type="number" id="pl-amt" placeholder="0" inputmode="numeric"></div>
     <button class="btn-p purple" onclick="debtAddPL()">+ 추가</button>
   </div>`;
-  return (hasData?jointSec+clSec+plSec+dSubmitBtn('sheet2',cl.length+pl.length):'')+form;
+  const s2msg=(cl.length+pl.length)+'건 등록'+(s.jointName?' · 공동명의 작성':'');
+  return (hasData?jointSec+clSec+plSec+dSubmitBtn('sheet2',0,s2msg):'')+form;
 }
 
 // ─── 시트3: 코인 내역 + 대책안 ────────────────────
 function rDebtS3(){
   const s=DB.debt?.sheet3||{};
   const sub=!!s.submitted;
-  const hasData=s.reason||s.whyContinue||s.howDid||s.status||s.plan||s.prevention||s.safeguard;
+  const hasData=s.reason||s.whyContinue||s.howDid||s.loss||s.status||s.plan||s.prevention||s.safeguard;
   function sv(label,val){return`<div style="margin-bottom:10px"><div style="color:var(--t3);font-size:11px;font-weight:600">${label}</div><div style="font-size:13px;font-weight:600;margin-top:4px;white-space:pre-line;line-height:1.6">${val||'<span style="color:var(--t4)">미작성</span>'}</div></div>`;}
   const view=`<div class="sec" style="margin-bottom:10px"><div class="sec-hdr"><div class="sec-title">코인 관련 내역</div></div>
     <div style="padding:14px 16px">${sv('코인 시작 계기',s.reason)}${sv('왜 계속했는지',s.whyContinue)}${sv('어떻게 했는지',s.howDid)}
@@ -1017,7 +1018,7 @@ function rDebtS3(){
     ${dTA('실질적인 안전장치','s3-safe',s.safeguard,'2G폰 교체 · 앱 제한 · 카드 관리 이전 · 급여 계좌 변경 · 거래소 탈퇴 캡처 등 구체적으로')}
     <button class="btn-p" onclick="debtSaveS3()">저장</button>
   </div>`;
-  return (hasData?view+dSubmitBtn('sheet3',1):'')+form;
+  return (hasData?view+dSubmitBtn('sheet3',0,'작성한 내용을 최종 제출해요.'):'')+form;
 }
 
 // ─── 시트4: 월간 고정지출 ────────────────────────
@@ -1145,7 +1146,7 @@ window.debtSaveField=async function(sheet,field,inputId){
 window.debtSaveS3=async function(){
   dEnsure('sheet3');
   const s=DB.debt.sheet3;
-  const r=(id,fb)=>document.getElementById(id)?.value||fb||'';
+  const r=(id,fb)=>{const el=document.getElementById(id);return el?el.value:(fb||'');};
   s.reason=r('s3-reason',s.reason); s.whyContinue=r('s3-why',s.whyContinue);
   s.howDid=r('s3-how',s.howDid);
   s.loss=Number(document.getElementById('s3-loss')?.value)||s.loss||0;
@@ -1173,6 +1174,7 @@ window.debtDelFixed=async function(idx){
   renderDebt();
 };
 window.debtSubmit=async function(sheet){
+  if(DB.debt?.[sheet]?.submitted){toast('이미 제출됐어요','🔒',2000);return;}
   if(!confirm('정말 최종 제출할까요?\n제출 후에는 절대 수정할 수 없어요.'))return;
   dEnsure(sheet);
   DB.debt[sheet].submitted=true;
