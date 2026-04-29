@@ -211,7 +211,7 @@ body{font-family:'Pretendard',sans-serif;background:var(--bg);color:var(--t1);mi
   <div class="pin-sub">4자리 PIN을 입력해주세요</div>
   <div class="pin-err" id="pinErr"></div>
   <div class="pin-dots" id="pinDots">
-    <div class="pdot"></div><div class="pdot"></div><div class="pdot"></div><div class="pdot"></div>
+    <div class="pdot"></div><div class="pdot"></div><div class="pdot"></div><div class="pdot"></div><div class="pdot"></div>
   </div>
   <div class="pin-grid">
     <button class="pk" onclick="pk('1')">1</button><button class="pk" onclick="pk('2')">2</button><button class="pk" onclick="pk('3')">3</button>
@@ -263,7 +263,7 @@ window.FB = {
   messagingSenderId:"YOUR_SENDER_ID",
   appId:"YOUR_APP_ID"
 };
-window.PINS = {wife:'1234', husband:'5678'};
+window.PINS = {wife:'13546', husband:'5678'};
 
 
 // ━━ STATE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -344,10 +344,12 @@ window.goPin=function(r){
   b.textContent=r==='wife'?'👩 아내 (송희)':'👨 남편';
   b.className='pin-badge '+r;
   document.getElementById('pinErr').textContent='';
+  const len=window.PINS[r]?.length||4;
+  document.getElementById('pinDots').innerHTML=Array.from({length:len},()=>'<div class="pdot"></div>').join('');
   renderDots();
 };
 let pinBuf='';
-window.pk=function(k){if(!k||pinBuf.length>=4)return;pinBuf+=k;renderDots();document.getElementById('pinErr').textContent='';if(pinBuf.length===4)setTimeout(checkPin,120);};
+window.pk=function(k){const maxLen=window.PINS[role]?.length||4;if(!k||pinBuf.length>=maxLen)return;pinBuf+=k;renderDots();document.getElementById('pinErr').textContent='';if(pinBuf.length===maxLen)setTimeout(checkPin,120);};
 window.pkDel=function(){pinBuf=pinBuf.slice(0,-1);renderDots();};
 function renderDots(){document.querySelectorAll('.pdot').forEach((d,i)=>{d.className='pdot'+(i<pinBuf.length?' on'+(role==='husband'?' h':''):'');});}
 function checkPin(){
