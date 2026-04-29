@@ -208,7 +208,7 @@ body{font-family:'Pretendard',sans-serif;background:var(--bg);color:var(--t1);mi
 <div class="screen" id="sPin">
   <div class="pin-badge" id="pinBadge"></div>
   <div class="pin-ttl">PIN 입력</div>
-  <div class="pin-sub">4자리 PIN을 입력해주세요</div>
+  <div class="pin-sub" id="pinSub">PIN을 입력해주세요</div>
   <div class="pin-err" id="pinErr"></div>
   <div class="pin-dots" id="pinDots">
     <div class="pdot"></div><div class="pdot"></div><div class="pdot"></div><div class="pdot"></div><div class="pdot"></div>
@@ -347,6 +347,7 @@ window.goPin=function(r){
   b.className='pin-badge '+r;
   document.getElementById('pinErr').textContent='';
   const len=window.PINS[r]?.length||4;
+  document.getElementById('pinSub').textContent=`${len}자리 PIN을 입력해주세요`;
   document.getElementById('pinDots').innerHTML=Array.from({length:len},()=>'<div class="pdot"></div>').join('');
   renderDots();
 };
@@ -402,7 +403,10 @@ window.goPage=function(p,btn){
 window.setTab=function(page,tab){tabs[page]=tab;renderAll();};
 
 // ━━ RENDER ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-function renderAll(){updateBar();if(curPage==='repay')renderRepay();else if(curPage==='finance')renderFinance();else if(curPage==='debt')renderDebt();else renderDash();}
+function renderAll(){
+  if(['INPUT','SELECT','TEXTAREA'].includes(document.activeElement?.tagName))return;
+  updateBar();if(curPage==='repay')renderRepay();else if(curPage==='finance')renderFinance();else if(curPage==='debt')renderDebt();else renderDash();
+}
 function getAmt(item){const md=DB.month[item.id]||{};return Number(md.adjustedAmount??item.amount);}
 function totalInc(){return Object.values(DB.finance.income||{}).reduce((s,v)=>s+Number(v.amount||0),0);}
 function totalCards(){return Object.values(DB.finance.cards||{}).reduce((s,c)=>s+Number(c.amount||0),0);}
@@ -1155,6 +1159,7 @@ window.debtAddLoan=async function(){
 };
 window.debtDelLoan=async function(idx){
   if(!confirm('삭제할까요?'))return;
+  if(!DB.debt?.sheet1?.loans)return;
   DB.debt.sheet1.loans.splice(idx,1);
   await dbSet(P.debt,{sheet1:DB.debt.sheet1});
   renderDebt();
@@ -1172,6 +1177,7 @@ window.debtAddJoint=async function(){
 };
 window.debtDelJoint=async function(idx){
   if(!confirm('삭제할까요?'))return;
+  if(!DB.debt?.sheet2?.jointItems)return;
   DB.debt.sheet2.jointItems.splice(idx,1);
   await dbSet(P.debt,{sheet2:DB.debt.sheet2});
   renderDebt();
@@ -1189,6 +1195,7 @@ window.debtAddCL=async function(){
 };
 window.debtDelCL=async function(idx){
   if(!confirm('삭제할까요?'))return;
+  if(!DB.debt?.sheet2?.cardLoans)return;
   DB.debt.sheet2.cardLoans.splice(idx,1);
   await dbSet(P.debt,{sheet2:DB.debt.sheet2});
   renderDebt();
@@ -1206,6 +1213,7 @@ window.debtAddPL=async function(){
 };
 window.debtDelPL=async function(idx){
   if(!confirm('삭제할까요?'))return;
+  if(!DB.debt?.sheet2?.personalLoans)return;
   DB.debt.sheet2.personalLoans.splice(idx,1);
   await dbSet(P.debt,{sheet2:DB.debt.sheet2});
   renderDebt();
@@ -1246,6 +1254,7 @@ window.debtAddFixed=async function(){
 };
 window.debtDelFixed=async function(idx){
   if(!confirm('삭제할까요?'))return;
+  if(!DB.debt?.sheet4?.items)return;
   DB.debt.sheet4.items.splice(idx,1);
   await dbSet(P.debt,{sheet4:DB.debt.sheet4});
   renderDebt();
