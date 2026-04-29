@@ -1094,7 +1094,7 @@ function rDebtS4(){
       </div>`;}).join('')}
     </div>`;
   }).join(''):`<div class="empty"><div class="empty-ico">📋</div><p>등록된 항목이 없어요</p></div>`;
-  const hero=items.length?`<div class="hero blue" style="margin-bottom:12px"><div class="hero-label">월 고정지출 합계</div><div class="hero-amount">${W(total)}</div><div class="hero-row"><div><div class="hsl">항목 수</div><div class="hsv">${items.length}개</div></div><div><div class="hsl">대출/카드론</div><div class="hsv">${W(items.filter(x=>x.cat==='대출 상환'||x.cat==='카드론').reduce((a,x)=>a+Number(x.amt||0),0))}</div></div></div></div>`:'';
+  const hero=items.length?`<div class="hero blue" style="margin-bottom:12px"><div class="hero-label">월 고정지출 합계</div><div class="hero-amount">${W(total)}</div><div class="hero-row"><div><div class="hsl">항목 수</div><div class="hsv">${items.length}개</div></div><div><div class="hsl">대출/카드론</div><div class="hsv">${W(items.filter(x=>x.cat==='대출 상환'||x.cat==='카드론/현금서비스').reduce((a,x)=>a+Number(x.amt||0),0))}</div></div></div></div>`:'';
   if(sub) return dLock(s.submittedAt)+hero+list;
   if(role==='wife') return (items.length?hero+list:dWait());
   const csvCard=`<div class="form-card" style="border:2px dashed var(--green);background:var(--green-l);margin-bottom:12px">
