@@ -405,11 +405,11 @@ window.pk=function(k){const maxLen=window.PINS[role]?.length||4;if(!k||pinBuf.le
 window.pkDel=function(){pinBuf=pinBuf.slice(0,-1);renderDots();};
 function renderDots(){document.querySelectorAll('.pdot').forEach((d,i)=>{d.className='pdot'+(i<pinBuf.length?' on'+(role==='husband'?' h':''):'');});}
 function checkPin(){
-  if(pinBuf===window.PINS[role]){show('sApp');enterApp();}
+  if(pinBuf===window.PINS[role]){localStorage.setItem('session',role);show('sApp');enterApp();}
   else{document.getElementById('pinErr').textContent='PIN이 틀렸어요';pinBuf='';renderDots();}
 }
-window.backToLogin=()=>{localStorage.removeItem('cachedRole');show('sLogin');};
-window.doLogout=()=>{unsubs.forEach(u=>typeof u==='function'&&u());unsubs=[];show('sLogin');};
+window.backToLogin=()=>{localStorage.removeItem('cachedRole');localStorage.removeItem('session');show('sLogin');};
+window.doLogout=()=>{localStorage.removeItem('session');unsubs.forEach(u=>typeof u==='function'&&u());unsubs=[];show('sLogin');};
 window.syncNow=()=>loadAll().then(renderAll).then(()=>toast('새로고침!','↻',1500));
 
 // ━━ ENTER APP ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -2123,9 +2123,15 @@ function rDash(){
 // ━━ INIT ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 window.addEventListener('load',()=>{
   ['e-date','i-date'].forEach(id=>{const el=document.getElementById(id);if(el)el.value=td();});
-  // 역할 캐시가 있으면 바로 PIN 화면으로
-  const cached=localStorage.getItem('cachedRole');
-  if(cached&&window.PINS[cached])goPin(cached);
+  const session=localStorage.getItem('session');
+  if(session&&window.PINS[session]){
+    // 세션 있으면 PIN 없이 바로 진입
+    role=session;show('sApp');enterApp();
+  } else {
+    // 역할만 캐시된 경우 PIN 화면으로
+    const cached=localStorage.getItem('cachedRole');
+    if(cached&&window.PINS[cached])goPin(cached);
+  }
 });
 </script>
 
