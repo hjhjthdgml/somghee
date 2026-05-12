@@ -259,7 +259,7 @@ body{font-family:'Pretendard',sans-serif;background:var(--bg);color:var(--t1);mi
     <button class="pk" onclick="pk('7')">7</button><button class="pk" onclick="pk('8')">8</button><button class="pk" onclick="pk('9')">9</button>
     <button class="pk"></button><button class="pk" onclick="pk('0')">0</button><button class="pk back" onclick="pkDel()">⌫</button>
   </div>
-  <button class="pin-back" onclick="backToLogin()">← 다시 선택</button>
+  <button class="pin-back" onclick="backToLogin()">다른 계정으로 ↩</button>
 </div>
 
 <div class="screen" id="sApp">
@@ -281,13 +281,13 @@ body{font-family:'Pretendard',sans-serif;background:var(--bg);color:var(--t1);mi
     <div class="msummary" id="msummary"></div>
   </div>
   <div class="page" id="pDash"></div>
-  <div class="page on" id="pRepay"></div>
-  <div class="page" id="pFinance"></div>
+  <div class="page" id="pRepay"></div>
+  <div class="page on" id="pFinance"></div>
   <div class="page" id="pDebt"></div>
   <nav class="bnav">
     <button class="bni" onclick="goPage('dash',this)"><span class="bni-ico">📈</span>대시보드</button>
-    <button class="bni on" onclick="goPage('repay',this)"><span class="bni-ico">💳</span>정산관리</button>
-    <button class="bni" onclick="goPage('finance',this)"><span class="bni-ico">📊</span>가계관리</button>
+    <button class="bni" onclick="goPage('repay',this)"><span class="bni-ico">💳</span>정산관리</button>
+    <button class="bni on" onclick="goPage('finance',this)"><span class="bni-ico">📊</span>가계관리</button>
     <button class="bni" onclick="goPage('debt',this)"><span class="bni-ico">🏦</span>부채관리</button>
   </nav>
 </div>
@@ -313,7 +313,7 @@ let role=null, Y=new Date().getFullYear(), M=new Date().getMonth()+1;
 let DB={items:[],month:{},finance:{},debt:{},cards:[],fixed:[],cats:[]};
 let _lastAction=null;
 let selDate=''; // lazily initialized in rFinCalendar
-let unsubs=[], fbFns=null, curPage='repay';
+let unsubs=[], fbFns=null, curPage='finance';
 let tabs={repay:'list', finance:'calendar', debt:'sheet1', finSub:'card'};
 const FB_ON = window.FB.apiKey!=='YOUR_API_KEY';
 
@@ -390,7 +390,7 @@ function shortW(n){if(n>=10000)return Math.round(n/10000)+'만';if(n>=1000)retur
 // ━━ LOGIN / PIN ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 function show(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('on'));document.getElementById(id).classList.add('on');}
 window.goPin=function(r){
-  role=r;pinBuf='';show('sPin');
+  role=r;pinBuf='';localStorage.setItem('cachedRole',r);show('sPin');
   const b=document.getElementById('pinBadge');
   b.textContent=r==='wife'?'👩 아내 (송희)':'👨 남편';
   b.className='pin-badge '+r;
@@ -408,7 +408,7 @@ function checkPin(){
   if(pinBuf===window.PINS[role]){show('sApp');enterApp();}
   else{document.getElementById('pinErr').textContent='PIN이 틀렸어요';pinBuf='';renderDots();}
 }
-window.backToLogin=()=>show('sLogin');
+window.backToLogin=()=>{localStorage.removeItem('cachedRole');show('sLogin');};
 window.doLogout=()=>{unsubs.forEach(u=>typeof u==='function'&&u());unsubs=[];show('sLogin');};
 window.syncNow=()=>loadAll().then(renderAll).then(()=>toast('새로고침!','↻',1500));
 
@@ -2121,9 +2121,11 @@ function rDash(){
 }
 
 // ━━ INIT ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// 날짜 기본값
 window.addEventListener('load',()=>{
   ['e-date','i-date'].forEach(id=>{const el=document.getElementById(id);if(el)el.value=td();});
+  // 역할 캐시가 있으면 바로 PIN 화면으로
+  const cached=localStorage.getItem('cachedRole');
+  if(cached&&window.PINS[cached])goPin(cached);
 });
 </script>
 
