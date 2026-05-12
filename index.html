@@ -460,13 +460,20 @@ function renderAll(){
   updateBar();if(curPage==='repay')renderRepay();else if(curPage==='finance')renderFinance();else if(curPage==='debt')renderDebt();else renderDash();
 }
 function getAmt(item){const md=DB.month[item.id]||{};return Number(md.adjustedAmount??item.amount);}
-function totalInc(){return Object.values(DB.finance.income||{}).reduce((s,v)=>s+Number(v.amount||0),0);}
+function totalInc(){
+  const ym=mk(Y,M),dim=new Date(Y,M,0).getDate();
+  const varInc=Object.values(DB.finance.income||{}).reduce((s,v)=>s+Number(v.amount||0),0);
+  const fixedInc=(DB.fixed||[]).filter(f=>f.active!==false&&f.kind==='income'&&(f.priceHistory||[]).some(h=>h.from<=ym))
+    .reduce((s,f)=>s+getFixedPrice(f,ym)*(f.frequency==='daily'?dim:1),0);
+  return varInc+fixedInc;
+}
 function totalCards(){const amts=DB.finance.cards||{};return Object.values(amts).reduce((s,v)=>s+Number(v||0),0);}
 function getFixedPrice(item,ym){const h=(item.priceHistory||[]).slice().sort((a,b)=>a.from.localeCompare(b.from));let p=0;for(const e of h){if(e.from<=ym)p=e.amount;}return p;}
 function activeCats(){const list=(DB.cats.length?DB.cats:DEFAULT_CATS.map((n,i)=>({id:'d'+i,name:n,deleted:false}))).filter(c=>!c.deleted);return list.map(c=>c.name);}
 function totalOther(){
-  const ym=mk(Y,M);
-  const fixedSum=(DB.fixed||[]).filter(f=>f.active!==false&&(f.priceHistory||[]).some(h=>h.from<=ym)).reduce((s,f)=>s+getFixedPrice(f,ym),0);
+  const ym=mk(Y,M),dim=new Date(Y,M,0).getDate();
+  const fixedSum=(DB.fixed||[]).filter(f=>f.active!==false&&(f.kind||'expense')==='expense'&&(f.priceHistory||[]).some(h=>h.from<=ym))
+    .reduce((s,f)=>s+getFixedPrice(f,ym)*(f.frequency==='daily'?dim:1),0);
   const varSum=Object.values(DB.finance.expenses||{}).filter(e=>!e.pendingApproval).reduce((s,e)=>s+Number(e.amount||0),0);
   return fixedSum+varSum;
 }
@@ -723,10 +730,15 @@ function rFinCalendar(){
   const pendExp=Object.entries(DB.finance.expenses||{}).filter(([,e])=>e.pendingApproval).map(([id,e])=>({id,type:'expense',pending:true,...e}));
 
   // 합계
-  const totInc=allInc.reduce((s,e)=>s+Number(e.amount||0),0);
+  const dim=new Date(Y,M,0).getDate();
+  const totVarInc=allInc.reduce((s,e)=>s+Number(e.amount||0),0);
+  const totFixedInc=(DB.fixed||[]).filter(f=>f.active!==false&&f.kind==='income'&&(f.priceHistory||[]).some(h=>h.from<=ym))
+    .reduce((s,f)=>s+getFixedPrice(f,ym)*(f.frequency==='daily'?dim:1),0);
+  const totInc=totVarInc+totFixedInc;
   const totVarExp=approvedExp.reduce((s,e)=>s+Number(e.amount||0),0);
-  const fixedSum=(DB.fixed||[]).filter(f=>f.active!==false&&(f.priceHistory||[]).some(h=>h.from<=ym)).reduce((s,f)=>s+getFixedPrice(f,ym),0);
-  const totExp=totVarExp+fixedSum+totalCards()+totalRepay();
+  const fixedExpSum=(DB.fixed||[]).filter(f=>f.active!==false&&(f.kind||'expense')==='expense'&&(f.priceHistory||[]).some(h=>h.from<=ym))
+    .reduce((s,f)=>s+getFixedPrice(f,ym)*(f.frequency==='daily'?dim:1),0);
+  const totExp=totVarExp+fixedExpSum+totalCards()+totalRepay();
   const balance=totInc-totExp;
 
   // 날짜별 그룹화
@@ -738,10 +750,23 @@ function rFinCalendar(){
     else byDate[d].exp+=Number(e.amount||0);
     byDate[d].items.push(e);
   });
+  // 고정 항목 달력에 표시
+  (DB.fixed||[]).filter(f=>f.active!==false&&(f.priceHistory||[]).some(h=>h.from<=ym)).forEach(f=>{
+    const price=getFixedPrice(f,ym);
+    const isInc=f.kind==='income';
+    const days=f.frequency==='daily'?Array.from({length:dim},(_,i)=>i+1):[Math.min(f.dayOfMonth||1,dim)];
+    days.forEach(d=>{
+      const ds=`${Y}-${String(M).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      if(!byDate[ds])byDate[ds]={inc:0,exp:0,items:[]};
+      if(isInc)byDate[ds].inc+=price;
+      else byDate[ds].exp+=price;
+      byDate[ds].items.push({id:`fx-${f.id}-${d}`,type:isInc?'income':'expense',cat:f.cat,amount:price,memo:f.name,who:'고정',fixed:true,fixedId:f.id,date:ds});
+    });
+  });
 
   // 달력 그리드
   const firstDow=new Date(Y,M-1,1).getDay();
-  const daysInMonth=new Date(Y,M,0).getDate();
+  const daysInMonth=dim;
   let calRows='',day=1;
   for(let row=0;row<6;row++){
     if(day>daysInMonth)break;
@@ -775,16 +800,17 @@ function rFinCalendar(){
     const ico=CAT_ICONS[e.cat]||'📦';
     const who=e.who||(e.byHusband?'남편':'송희');
     const isInc=e.type==='income';
-    const canDel=role==='wife'||(role==='husband'&&e.byHusband&&!e.pending);
+    const canDel=!e.fixed&&(role==='wife'||(role==='husband'&&e.byHusband&&!e.pending));
     return`<div class="tx-item">
-      <div class="tx-ico">${ico}</div>
+      <div class="tx-ico" style="${e.fixed?'background:var(--blue-l)':''}">${ico}</div>
       <div class="tx-body">
-        <div class="tx-name">${e.memo||e.cat||'-'}</div>
+        <div class="tx-name">${e.memo||e.cat||'-'}${e.fixed?` <span style="font-size:9px;background:var(--blue-l);color:var(--blue);border-radius:4px;padding:1px 5px;font-weight:700">고정</span>`:''}</div>
         <div class="tx-sub">${e.cat||'-'} · ${who}${e.pending?` · <span style="color:var(--yellow);font-weight:700">미확인</span>`:''}</div>
       </div>
       <div style="display:flex;align-items:center;gap:6px">
         <div class="tx-amt${isInc?' pos':''}">${isInc?'+':'−'}${W(e.amount)}</div>
         ${canDel?`<button class="xbtn" onclick="${isInc?`delIncome('${e.id}')`:`delExp('${e.id}')`}">×</button>`:''}
+        ${e.fixed&&role==='wife'?`<button class="btn-danger" style="font-size:10px;padding:4px 8px" onclick="stopFixed('${e.fixedId}')">중단</button>`:''}
         ${e.pending&&role==='wife'?`<button class="btn-approve" style="font-size:10px;padding:4px 8px" onclick="approveExp('${e.id}')">확인</button>`:''}
       </div>
     </div>`;
@@ -928,7 +954,7 @@ function rFinExpense(){
   const canEdit=role==='wife';
 
   // ── 고정지출 섹션 ──
-  const activeFixed=(DB.fixed||[]).filter(f=>f.active!==false&&(f.priceHistory||[]).some(h=>h.from<=ym));
+  const activeFixed=(DB.fixed||[]).filter(f=>f.active!==false&&(f.kind||'expense')==='expense'&&(f.priceHistory||[]).some(h=>h.from<=ym));
   const fixedTotal=activeFixed.reduce((s,f)=>s+getFixedPrice(f,ym),0);
   const fixedRows=activeFixed.map(f=>{
     const price=getFixedPrice(f,ym);
@@ -1262,10 +1288,25 @@ window.openAddModal=function(initType){
     <div class="modal-sect">카테고리</div>
     <div class="cat-grid" id="m-cat-grid">${makeCatHtml(type)}</div>
     <div class="field"><label>메모</label><input id="m-memo" placeholder="내용을 입력해주세요"></div>
-    <button class="btn-p" style="margin-top:16px" onclick="saveEntry()">저장하기</button>
+    <label style="display:flex;align-items:center;gap:10px;padding:12px 0;border-top:1px solid var(--border);cursor:pointer;margin-top:4px">
+      <input type="checkbox" id="m-fixed" style="width:18px;height:18px;accent-color:var(--blue)" onchange="toggleMFixed()">
+      <span style="font-size:13px;font-weight:700;color:var(--blue)">🔄 매달/매일 반복 (고정으로 저장)</span>
+    </label>
+    <div id="m-fixed-detail" style="display:none;padding:10px;background:var(--sf2);border-radius:10px;margin-bottom:4px">
+      <div style="display:flex;gap:8px;margin-bottom:10px">
+        <button id="mfq-monthly" onclick="setMFreq('monthly')" style="flex:1;padding:9px;border:2px solid var(--blue);border-radius:9px;background:var(--blue);color:#fff;font-weight:700;font-size:13px;cursor:pointer;font-family:inherit">📅 매달</button>
+        <button id="mfq-daily" onclick="setMFreq('daily')" style="flex:1;padding:9px;border:2px solid var(--border);border-radius:9px;background:var(--surface);color:var(--t3);font-weight:700;font-size:13px;cursor:pointer;font-family:inherit">🔄 매일</button>
+      </div>
+      <div id="mfq-day-wrap">
+        <label style="font-size:12px;color:var(--t3);font-weight:600;display:block;margin-bottom:4px">매달 몇 일에 반복할까요?</label>
+        <input type="number" id="m-fixed-day" min="1" max="31" value="1" inputmode="numeric" style="background:var(--surface);border:1.5px solid var(--border);border-radius:8px;padding:8px 12px;font-size:14px;font-family:inherit;width:90px;outline:none">
+      </div>
+    </div>
+    <button class="btn-p" style="margin-top:12px" onclick="saveEntry()">저장하기</button>
   </div>`;
   document.body.appendChild(ov);
   ov.addEventListener('click',e=>{if(e.target===ov)closeAddModal();});
+  window._mfreq='monthly';
   setFinWho(role==='husband'?'남편':'송희');
 };
 
@@ -1280,6 +1321,19 @@ window.switchMType=function(type){
   if(grid&&window._makeCatHtml)grid.innerHTML=window._makeCatHtml(type);
 };
 
+window.toggleMFixed=function(){
+  const on=document.getElementById('m-fixed')?.checked;
+  const d=document.getElementById('m-fixed-detail');
+  if(d)d.style.display=on?'block':'none';
+};
+window.setMFreq=function(freq){
+  window._mfreq=freq;
+  const mb=document.getElementById('mfq-monthly'),db=document.getElementById('mfq-daily');
+  if(mb){mb.style.background=freq==='monthly'?'var(--blue)':'var(--surface)';mb.style.color=freq==='monthly'?'#fff':'var(--t3)';mb.style.borderColor=freq==='monthly'?'var(--blue)':'var(--border)';}
+  if(db){db.style.background=freq==='daily'?'var(--blue)':'var(--surface)';db.style.color=freq==='daily'?'#fff':'var(--t3)';db.style.borderColor=freq==='daily'?'var(--blue)':'var(--border)';}
+  const dw=document.getElementById('mfq-day-wrap');
+  if(dw)dw.style.display=freq==='daily'?'none':'block';
+};
 window.setFinWho=function(id){
   document.querySelectorAll('.who-item').forEach(e=>e.classList.remove('sel'));
   document.getElementById('wsel-'+id)?.classList.add('sel');
@@ -1299,6 +1353,15 @@ window.saveEntry=async function(){
   const who=document.querySelector('.who-item.sel .who-name')?.textContent||'';
   const cat=document.querySelector('.cat-item.sel .cat-lbl')?.textContent||'기타';
   selDate=date;
+  // 고정 등록 분기
+  if(document.getElementById('m-fixed')?.checked){
+    const freq=window._mfreq||'monthly';
+    const day=Number(document.getElementById('m-fixed-day')?.value)||1;
+    DB.fixed.push({id:uid(),name:memo||cat,cat,kind:type,frequency:freq,dayOfMonth:day,active:true,priceHistory:[{amount:amt,from:mk(Y,M)}],addedAt:td()});
+    await dbSet(P.fixed,{list:DB.fixed});
+    toast((type==='income'?'고정 수입':'고정 지출')+` 등록됐어요 (${freq==='daily'?'매일':`매달 ${day}일`})`,'🔄');
+    closeAddModal();return;
+  }
   if(type==='income'){
     if(!DB.finance.income)DB.finance.income={};
     DB.finance.income[uid()]={cat,amount:amt,memo,date,who,byHusband:role==='husband',addedAt:td()};
